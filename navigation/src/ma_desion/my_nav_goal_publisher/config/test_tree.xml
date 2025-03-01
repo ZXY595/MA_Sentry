@@ -1,0 +1,29 @@
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="check_and_navigate">
+      <!-- Step 1: 导航到初始点 (4,3) -->
+      <!-- <NavigateToGoal goal_x="4.0" goal_y="3.0" goal_orientation="1.0"/> -->
+      <NavigateToGoal goal_x="3.0" goal_y="0.0" goal_orientation="1.0"/>
+
+
+       <NavigateToGoal goal_x="3.0" goal_y="0.0" goal_orientation="1.0"/>
+
+       <RepeatUntilFail>
+          <CheckAmmunitionCount threshold="30"/>
+        </RepeatUntilFail>
+
+        <NavigateToGoal goal_x="0.0" goal_y="0.0" goal_orientation="1.0"/>
+
+        <RepeatUntilFail>
+          <CheckAmmunitionCount_2 threshold="400"/>
+        </RepeatUntilFail>
+
+        <NavigateToGoal goal_x="3.0" goal_y="0.0" goal_orientation="1.0"/>
+
+        <RepeatUntilFail>
+          <CheckAmmunitionCount_2 threshold="1000"/>
+        </RepeatUntilFail>
+
+    </Sequence>
+  </BehaviorTree>
+</root>
