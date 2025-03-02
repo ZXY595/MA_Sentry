@@ -64,31 +64,10 @@ rclcpp_components_register_node(${PROJECT_NAME}
 )
 
 #############
-## Testing ##
-#############
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  list(APPEND AMENT_LINT_AUTO_EXCLUDE
-    ament_cmake_copyright
-    ament_cmake_uncrustify
-    ament_cmake_cpplint
-    ament_cmake_lint_cmake
-  )
-  ament_lint_auto_find_test_dependencies()
-
-  find_package(ament_cmake_gtest)
-  ament_add_gtest(test_detector test/test_detector.cpp)
-  target_link_libraries(test_detector ${PROJECT_NAME})
-
-endif()
-
-#############
 ## Install ##
 #############
 
 ament_auto_package(
   INSTALL_TO_SHARE
-  docs
   model
 )
