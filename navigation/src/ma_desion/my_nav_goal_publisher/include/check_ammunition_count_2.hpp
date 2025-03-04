@@ -88,7 +88,7 @@ private:
     //ammunition_count_ = msg->judge_system_data.ammo;
     //blood_count_ = msg->judge_system_data.blood;
     t = node_1->now().seconds();
-    if(t-t_s >= 5)
+    if(t-t_s >= 30)
     {
       ammunition_count_ = 500;
     }
@@ -98,6 +98,6 @@ private:
     }
     
     has_received_ammo_ = true;
-    RCLCPP_INFO(node_1->get_logger(), "Received ammunition count: %d", ammunition_count_);
+    RCLCPP_INFO(node_1->get_logger(), "Received ammunition_2222 count: %d", ammunition_count_);
   }
 };

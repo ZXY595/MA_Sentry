@@ -26,7 +26,7 @@ public:
 
   virtual BT::NodeStatus tick() override
   {
-    if (!client_ptr_->wait_for_action_server(10s)) {
+    if (!client_ptr_->wait_for_action_server(20s)) {
       RCLCPP_ERROR(node_->get_logger(), "Action server not available after waiting");
       return BT::NodeStatus::FAILURE;
     }
