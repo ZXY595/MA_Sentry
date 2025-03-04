@@ -1,0 +1,9 @@
+[package]
+name = "ma_bringup"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+ros2-client = "0.8"
+ros2-interfaces-humble = { version = "0.0.1", features = ["geometry_msgs"] }
