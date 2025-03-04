@@ -24,7 +24,7 @@ int main(int argc, char ** argv)
   factory.registerNodeType<RepeatUntilFail>("RepeatUntilFail");
 
   // 加载行为树 XML 配置文件，指定行为树结构
-  std::string tree_file = "/home/ma/MA/PB_RMSimulation/src/ma_desion/my_nav_goal_publisher/config/test_tree.xml";
+  std::string tree_file = "/home/ma/MA/PB_RMSimulation/src/ma_decision/my_nav_goal_publisher/config/test_tree.xml";
   
   // 检查 XML 文件是否存在
   if (access(tree_file.c_str(), F_OK) != 0) {
