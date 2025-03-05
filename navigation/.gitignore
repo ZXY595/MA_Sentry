@@ -1,6 +1,7 @@
 devel/
 build/
 install/
+target/
 log/
 
 .vscode/
