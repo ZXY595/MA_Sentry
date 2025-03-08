@@ -146,6 +146,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
 
 [[package]]
+name = "bonsai-bt"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b98067c11d7731822a43718105f65e65377f80b043c28a749e3bd024d0e7ff02"
+
+[[package]]
 name = "bstr"
 version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -763,6 +769,18 @@ name = "log"
 version = "0.4.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30bde2b3dc3671ae49d8e2e9f044c7c005836e7a023ee57cffa25ab82764bb9e"
+
+[[package]]
+name = "ma_behavior_tree"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bonsai-bt",
+ "ros2-client 0.8.0",
+ "ros2-interfaces-humble",
+ "serde",
+ "tokio",
+]
 
 [[package]]
 name = "ma_bringup"
