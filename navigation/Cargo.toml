@@ -1,5 +1,14 @@
 [workspace]
 resolver = "3"
-members = [
-    "src/ma_decision/ma_bringup",
-]
+members = ["src/ma_decision/ma_bringup", "src/rm_driver/ma_serial_driver"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+ros2-client = "0.8"
+ros2-interfaces-humble = { version = "0.0.1" }
+tokio = { version = "1.44.0", features = ["rt"] }
+tokio-util = { version = "0.7.13" }
+futures-util = { version = "0.3.31", default-features = false, features = [
+    "std",
+    "async-await",
+] }

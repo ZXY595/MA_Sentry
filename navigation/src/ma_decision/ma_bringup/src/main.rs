@@ -3,26 +3,32 @@ use ros2_client::{
     ros2::{self, QosPolicies, policy},
 };
 use ros2_interfaces_humble::geometry_msgs::msg::{Twist, Vector3};
+use tokio::runtime;
 
 fn main() -> Result<(), anyhow::Error> {
-    let ctx = ros2_client::Context::new()?;
-    let mut node = ctx.new_node(NodeName::new("/ma", "bringup")?, Default::default())?;
+    let mut node = ros2_client::Context::new()?
+        .new_node(NodeName::new("/ma", "bringup")?, Default::default())?;
+
+    let qos = QosPolicies::builder()
+        .history(policy::History::KeepLast { depth: 10 })
+        .reliability(policy::Reliability::Reliable {
+            max_blocking_time: ros2::Duration::from_millis(100),
+        })
+        .durability(policy::Durability::TransientLocal)
+        .build();
+
     let chassis_topic = node.create_topic(
         &Name::new("/", "cmd_vel_chassis")?,
         MessageTypeName::new("geometry_msgs", "Twist"),
-        &QosPolicies::builder()
-            .history(policy::History::KeepLast { depth: 10 })
-            .reliability(policy::Reliability::Reliable {
-                max_blocking_time: ros2::Duration::from_millis(100),
-            })
-            .durability(policy::Durability::TransientLocal)
-            .build(),
+        &qos,
     )?;
     let chassis_publisher = node.create_publisher::<Twist>(&chassis_topic, None)?;
 
-    smol::spawn(node.spinner()?.spin()).detach();
+    let runtime = runtime::Builder::new_current_thread().build()?;
 
-    smol::block_on::<Result<(), anyhow::Error>>(async {
+    runtime.spawn(node.spinner()?.spin());
+
+    runtime.block_on(async {
         chassis_publisher.wait_for_subscription(&node).await;
         chassis_publisher
             .async_publish(Twist {
