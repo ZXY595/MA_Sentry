@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-bonsai-bt = "0.9.0"
+bonsai-bt = "0.10.0"
 ros2-client.workspace = true
 ros2-interfaces-humble = { workspace = true, features = ["nav2_msgs"] }
 serde = { version = "1.0", features = ["derive"] }
-tokio = {workspace = true, features = []}
+tokio = {workspace = true, features = ["sync"]}

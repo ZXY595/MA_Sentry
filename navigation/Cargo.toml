@@ -4,7 +4,7 @@ members = [ "src/ma_decision/ma_behavior_tree", "src/ma_decision/ma_bringup", "s
 
 [workspace.dependencies]
 anyhow = "1.0"
-ros2-client = "0.8"
+ros2-client = "0.8.1"
 ros2-interfaces-humble = { version = "0.0.1" }
 tokio = { version = "1.44.0", features = ["rt"] }
 tokio-util = { version = "0.7.13" }
