@@ -781,16 +781,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ma_bringup"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ros2-client 0.8.1",
- "ros2-interfaces-humble",
- "tokio",
-]
-
-[[package]]
 name = "ma_serial_driver"
 version = "0.1.0"
 dependencies = [
