@@ -1,4 +1,5 @@
-use anyhow::Context;
+use std::sync::Arc;
+
 use bonsai_bt::Status;
 use ros2_client::{
     ActionTypeName, Name,
@@ -6,7 +7,7 @@ use ros2_client::{
     ros2::QosPolicies,
 };
 use ros2_interfaces_humble::geometry_msgs::msg::{Pose, PoseStamped};
-use tokio::{runtime::Runtime, sync::mpsc};
+use tokio::{sync::oneshot::{self, error::TryRecvError}, task};
 
 use crate::nav2_action::{self, NavigateToPose};
 
@@ -22,38 +23,69 @@ impl SentryAction {
     pub fn tick(&self, state: &mut SentryState, _dt: f64) -> Status {
         match self {
             SentryAction::MoveTo(pose) => {
-                move_to::tick(state.goal_reached, &state.goal_sender, pose.clone())
+                let receiver = state.move_status.get_or_insert_with(|| {
+                    let (task_status_sender, task_status_receiver) = oneshot::channel();
+                    wrap_async_task(
+                        task_status_sender,
+                        move_to::tick(Arc::clone(&state.nav_client), pose.clone()),
+                    );
+                    task_status_receiver
+                });
+                match receiver.try_recv() {
+                    Err(TryRecvError::Empty) => Status::Running,
+                    Ok(TaskStatus::Finished) => {
+                        state.move_status = None;
+                        Status::Success
+                    }
+                    Err(TryRecvError::Closed) | Ok(TaskStatus::Error) => {
+                        state.move_status = None;
+                        Status::Failure
+                    }
+                }
             }
             SentryAction::Idle => Status::Success,
         }
     }
 }
 
-#[derive(Debug)]
 pub struct SentryState {
     hp: usize,
     ammo: usize,
-    goal_reached: bool,
-    goal_sender: mpsc::Sender<PoseStamped>,
+    nav_client: Arc<ActionClient<NavigateToPose>>,
+    move_status: Option<oneshot::Receiver<TaskStatus>>,
 }
 
 impl SentryState {
-    pub fn new(node: &mut ros2_client::Node, runtime: &Runtime) -> Self {
-        let (goal_sender, goal_receiver) = mpsc::channel::<PoseStamped>(3);
-        runtime.spawn(navigate_to_pose_server_task(
-            create_navigate_to_pose_client(node)
-                .context("Failed to create NavigateToPose client")
-                .unwrap(),
-            goal_receiver,
-        ));
+    pub fn new(node: &mut ros2_client::Node) -> Self {
+        let client = create_navigate_to_pose_client(node).unwrap();
 
         Self {
             hp: 0,
             ammo: 0,
-            goal_reached: false,
-            goal_sender,
+            nav_client: Arc::new(client),
+            move_status: None,
         }
     }
+}
+
+fn wrap_async_task(
+    task_status_sender: oneshot::Sender<TaskStatus>,
+    task: impl Future<Output = Result<(), anyhow::Error>> + Send + 'static,
+) {
+    task::spawn(async move {
+        if let Err(err) = task.await {
+            println!("task failed: {err:?}");
+            task_status_sender.send(TaskStatus::Error).unwrap() // receiver should not be dropped now;
+        } else {
+            task_status_sender.send(TaskStatus::Finished).unwrap() // same as above
+        }
+    });
+}
+
+#[derive(Debug)]
+enum TaskStatus {
+    Finished,
+    Error,
 }
 
 fn create_navigate_to_pose_client(
@@ -71,24 +103,4 @@ fn create_navigate_to_pose_client(
             status_subscription: QosPolicies::default(),
         },
     )?)
-}
-
-async fn navigate_to_pose_server_task(
-    client: ActionClient<NavigateToPose>,
-    mut goal_receiver: mpsc::Receiver<PoseStamped>,
-) {
-    loop {
-        if let Err(err) = (async || {
-            let goal = goal_receiver
-                .recv()
-                .await
-                .ok_or(anyhow::anyhow!("goal_receiver.recv() failed"))?;
-            nav2_action::process_navigate_to_pose(&client, goal).await?;
-            Result::<(), anyhow::Error>::Ok(())
-        })()
-        .await
-        {
-            println!("navigate_to_pose_server_task failed: {err:?}")
-        }
-    }
 }

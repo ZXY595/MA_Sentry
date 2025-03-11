@@ -17,13 +17,6 @@ impl Message for NavigateToPoseGoal {}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct NavigateToPoseResult {
-    // uint16 NONE=0
-    // uint16 UNKNOWN=9000
-    // uint16 FAILED_TO_LOAD_BEHAVIOR_TREE=9001
-    // uint16 TF_ERROR=9002
-
-    // uint16 error_code
-    // string error_msg
     pub error_code: u16,
     pub error_msg: String,
 }
@@ -73,7 +66,7 @@ impl ActionTypes for NavigateToPose {
 ///
 /// # Error
 /// If the goal fails to be sent, rejected, or not successful, an error is returned.
-pub async fn process_navigate_to_pose(
+pub async fn send_navigate_to_pose(
     client: &ActionClient<NavigateToPose>,
     pose: PoseStamped,
 ) -> Result<(), anyhow::Error> {

@@ -1,24 +1,20 @@
+use std::{ops::Deref, sync::Arc};
+
 use super::*;
-use ros2_interfaces_humble::std_msgs::msg::Header;
+use ros2_interfaces_humble::{builtin_interfaces::msg::Time, std_msgs::msg::Header};
 
-pub fn tick(
-    goal_reached: bool,
-    goal_sender: &mpsc::Sender<PoseStamped>,
+pub async fn tick(
+    client: Arc<ActionClient<NavigateToPose>>,
     pose: Pose,
-) -> Status {
-    if goal_reached {
-        return Status::Success;
-    }
-
+) -> Result<(), anyhow::Error> {
+    println!("move to {:?}", &pose);
     let goal = PoseStamped {
-        header: Header::default(),
+        header: Header {
+            stamp: Time::default(),
+            frame_id: "map".to_string(),
+        },
         pose,
     };
-    match goal_sender.blocking_send(goal) {
-        Ok(_) => Status::Running,
-        Err(e) => {
-            println!("Error sending goal: {e}");
-            Status::Failure
-        }
-    }
+    nav2_action::send_navigate_to_pose(client.deref(), goal).await?;
+    Ok(())
 }
