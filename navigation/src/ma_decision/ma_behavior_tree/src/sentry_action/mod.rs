@@ -4,10 +4,13 @@ use bonsai_bt::Status;
 use ros2_client::{
     ActionTypeName, Name,
     action::{ActionClient, ActionClientQosPolicies},
-    ros2::QosPolicies,
+    ros2::{Duration, QosPolicyBuilder, policy},
 };
 use ros2_interfaces_humble::geometry_msgs::msg::{Pose, PoseStamped};
-use tokio::{sync::oneshot::{self, error::TryRecvError}, task};
+use tokio::{
+    sync::oneshot::{self, error::TryRecvError},
+    task,
+};
 
 use crate::nav2_action::{self, NavigateToPose};
 
@@ -91,16 +94,23 @@ enum TaskStatus {
 fn create_navigate_to_pose_client(
     node: &mut ros2_client::Node,
 ) -> Result<ActionClient<NavigateToPose>, anyhow::Error> {
+    let qos = QosPolicyBuilder::new()
+        .reliability(policy::Reliability::Reliable {
+            max_blocking_time: Duration::from_millis(100),
+        })
+        .durability(policy::Durability::TransientLocal)
+        .history(policy::History::KeepLast { depth: 1 })
+        .build();
     Ok(node.create_action_client::<NavigateToPose>(
-        ros2_client::ServiceMapping::Basic,
+        ros2_client::ServiceMapping::Enhanced,
         &Name::new("/", "navigate_to_pose")?,
         &ActionTypeName::new("nav2_msgs", "NavigateToPose"),
         ActionClientQosPolicies {
-            goal_service: QosPolicies::default(),
-            result_service: QosPolicies::default(),
-            cancel_service: QosPolicies::default(),
-            feedback_subscription: QosPolicies::default(),
-            status_subscription: QosPolicies::default(),
+            goal_service: qos.clone(),
+            result_service: qos.clone(),
+            cancel_service: qos.clone(),
+            feedback_subscription: qos.clone(),
+            status_subscription: qos,
         },
     )?)
 }

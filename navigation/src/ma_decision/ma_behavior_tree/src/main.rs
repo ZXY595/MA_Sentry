@@ -13,20 +13,19 @@ fn main() -> Result<(), anyhow::Error> {
         Default::default(),
     )?;
 
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread().build()?;
 
     let sequence = Behavior::Sequence(vec![Behavior::Action(
         SentryAction::MoveTo(Pose::default()),
     )]);
+
+    let mut sentry_state = SentryState::new(&mut node);
 
     let mut behavior_tree = BT::new(sequence, ());
 
     runtime.spawn(node.spinner()?.spin());
 
     runtime.block_on(async move {
-        let mut sentry_state = SentryState::new(&mut node);
         let mut timer = Timer::init_time();
         loop {
             let event = Event::from(UpdateArgs { dt: timer.get_dt() });
