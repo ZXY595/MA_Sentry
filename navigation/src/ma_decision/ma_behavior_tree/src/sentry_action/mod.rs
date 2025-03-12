@@ -1,18 +1,11 @@
 use std::sync::Arc;
 
 use bonsai_bt::Status;
-use ros2_client::{
-    ActionTypeName, Name,
-    action::{ActionClient, ActionClientQosPolicies},
-    ros2::{Duration, QosPolicyBuilder, policy},
-};
-use ros2_interfaces_humble::geometry_msgs::msg::{Pose, PoseStamped};
+use r2r::{ActionClient, geometry_msgs::msg::Pose, nav2_msgs::action::NavigateToPose};
 use tokio::{
     sync::oneshot::{self, error::TryRecvError},
     task,
 };
-
-use crate::nav2_action::{self, NavigateToPose};
 
 mod move_to;
 
@@ -54,14 +47,12 @@ impl SentryAction {
 pub struct SentryState {
     hp: usize,
     ammo: usize,
-    nav_client: Arc<ActionClient<NavigateToPose>>,
+    nav_client: Arc<ActionClient<NavigateToPose::Action>>,
     move_status: Option<oneshot::Receiver<TaskStatus>>,
 }
 
 impl SentryState {
-    pub fn new(node: &mut ros2_client::Node) -> Self {
-        let client = create_navigate_to_pose_client(node).unwrap();
-
+    pub fn new(client: ActionClient<NavigateToPose::Action>) -> Self {
         Self {
             hp: 0,
             ammo: 0,
@@ -77,7 +68,7 @@ fn wrap_async_task(
 ) {
     task::spawn(async move {
         if let Err(err) = task.await {
-            println!("task failed: {err:?}");
+            log::error!("task failed: {err:?}");
             task_status_sender.send(TaskStatus::Error).unwrap() // receiver should not be dropped now;
         } else {
             task_status_sender.send(TaskStatus::Finished).unwrap() // same as above
@@ -91,26 +82,3 @@ enum TaskStatus {
     Error,
 }
 
-fn create_navigate_to_pose_client(
-    node: &mut ros2_client::Node,
-) -> Result<ActionClient<NavigateToPose>, anyhow::Error> {
-    let qos = QosPolicyBuilder::new()
-        .reliability(policy::Reliability::Reliable {
-            max_blocking_time: Duration::from_millis(100),
-        })
-        .durability(policy::Durability::TransientLocal)
-        .history(policy::History::KeepLast { depth: 1 })
-        .build();
-    Ok(node.create_action_client::<NavigateToPose>(
-        ros2_client::ServiceMapping::Enhanced,
-        &Name::new("/", "navigate_to_pose")?,
-        &ActionTypeName::new("nav2_msgs", "NavigateToPose"),
-        ActionClientQosPolicies {
-            goal_service: qos.clone(),
-            result_service: qos.clone(),
-            cancel_service: qos.clone(),
-            feedback_subscription: qos.clone(),
-            status_subscription: qos,
-        },
-    )?)
-}

@@ -1,4 +1,4 @@
-use ros2_interfaces_humble::geometry_msgs::msg::{Twist, Vector3};
+use r2r::geometry_msgs::msg::{Twist, Vector3};
 use tokio_util::{bytes::BufMut, codec::Encoder};
 
 #[derive(Default)]

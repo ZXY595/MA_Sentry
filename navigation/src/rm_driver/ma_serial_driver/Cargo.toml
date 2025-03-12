@@ -6,8 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
-ros2-client.workspace = true
-ros2-interfaces-humble = { workspace = true, features = ["geometry_msgs"] }
+r2r.workspace = true
 tokio = { workspace = true, features = ["io-util"] }
 tokio-serial = { version = "5.4.5", features = ["codec"] }
 tokio-util = { workspace = true, features = ["codec"] }

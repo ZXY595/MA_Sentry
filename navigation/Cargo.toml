@@ -4,8 +4,7 @@ members = ["src/ma_decision/ma_behavior_tree", "src/rm_driver/ma_serial_driver"]
 
 [workspace.dependencies]
 anyhow = "1.0"
-ros2-client = { version = "0.8.1", features = ["pre-iron-gid"] }
-ros2-interfaces-humble = { version = "0.0.1" }
+r2r = "0.9.4"
 tokio = { version = "1.44.0", features = ["rt"] }
 tokio-util = { version = "0.7.13" }
 futures-util = { version = "0.3.31", default-features = false, features = [
