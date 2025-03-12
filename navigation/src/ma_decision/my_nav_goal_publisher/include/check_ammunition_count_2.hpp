@@ -86,7 +86,7 @@ private:
   void onAmmunitionReceived(const rm_interfaces::msg::SerialReceiveData::SharedPtr msg)
   {
     //ammunition_count_ = msg->judge_system_data.ammo;
-    //blood_count_ = msg->judge_system_data.blood;
+    //blood_count_ = msg->judge_system_data.hp;
     t = node_1->now().seconds();
     if(t-t_s >= 30)
     {

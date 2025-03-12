@@ -4,7 +4,7 @@ mod encoder;
 use std::{pin::pin, time::Duration};
 
 use anyhow::Context;
-use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt};
 use r2r::geometry_msgs::msg::Twist;
 use tokio::runtime;
 use tokio_serial::SerialPortBuilderExt;

@@ -88,7 +88,7 @@ void ProtocolSentry::send(const geometry_msgs::msg::Twist &msg) {
 }
 
 bool ProtocolSentry::receive(rm_interfaces::msg::SerialReceiveData &data) {
-  FixedPacket<16> packet;
+  FixedPacket<32> packet;
   if (packet_tool_->recvPacket(packet)) {
      // game status
     packet.unloadData(data.mode, 1);
@@ -97,7 +97,8 @@ bool ProtocolSentry::receive(rm_interfaces::msg::SerialReceiveData &data) {
     packet.unloadData(data.roll, 2);
     packet.unloadData(data.pitch, 6);
     packet.unloadData(data.yaw, 10);
-    //packet.unloadData(data.judge_system_data.ammo, 14);
+    packet.unloadData(data.judge_system_data.ammo, 14);
+    packet.unloadData(data.judge_system_data.hp, 14);
     // packet.unloadData(data.pitch, 2);
     // packet.unloadData(data.yaw, 6);
     // // 实际上是底盘角度
