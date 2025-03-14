@@ -4,25 +4,28 @@ mod sentry_action;
 use std::{pin::pin, time::Duration};
 
 use bonsai_bt::{BT, Event, Timer, UpdateArgs};
-use r2r::{QosProfile, rm_interfaces};
+use r2r::{QosProfile, qos, rm_interfaces};
 use sentry_action::SentryState;
-use tokio::task;
-use tokio_stream::StreamExt;
+use tokio::{task, time};
+use futures_util::StreamExt;
 
 fn main() -> Result<(), anyhow::Error> {
-    // env_logger::init();
+    env_logger::init();
     let ctx = r2r::Context::create()?;
     let mut node = r2r::Node::create(ctx, "behavior_tree", "/ma")?;
 
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .build()?;
 
     let behavior = behavior::get_behavior();
 
     let serial_stream = node.subscribe::<rm_interfaces::msg::SerialReceiveData>(
-        "serial/receive",
-        QosProfile::default(),
+        "/serial/receive",
+        QosProfile::default()
+            .reliability(qos::ReliabilityPolicy::SystemDefault)
+            .history(qos::HistoryPolicy::KeepLast)
+            .durability(qos::DurabilityPolicy::SystemDefault),
     )?;
 
     let client = node.create_action_client("/navigate_to_pose")?;
@@ -58,7 +61,8 @@ fn main() -> Result<(), anyhow::Error> {
                 let dt = event.dt;
                 event.action.tick(&mut sentry_state, dt)
             });
-            node.spin_once(Duration::from_millis(50));
+            node.spin_once(Duration::from_millis(100));
+            // time::sleep(Duration::from_millis(50)).await;
             task::yield_now().await;
         }
     });

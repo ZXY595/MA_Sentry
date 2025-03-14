@@ -3,10 +3,13 @@ use r2r::geometry_msgs::msg::{Point, Pose};
 
 use crate::sentry_action::SentryAction;
 pub fn get_behavior() -> Behavior<SentryAction> {
-    WhileAll(
-        Box::new(Action(SentryAction::UntilGameOver)),
-        vec![AlwaysSucceed(Box::new(alive_task()))],
-    )
+    Sequence(vec![
+        Action(SentryAction::UntilGameStarted),
+        WhileAll(
+            Box::new(Action(SentryAction::UntilGameOver)),
+            vec![AlwaysSucceed(Box::new(alive_task()))],
+        ),
+    ])
 }
 
 fn alive_task() -> Behavior<SentryAction> {
@@ -25,14 +28,14 @@ fn attack_move_to_buff_area_and_retreat() -> Behavior<SentryAction> {
 }
 
 fn move_to_buff_area() -> Behavior<SentryAction> {
-    Box::new(Action(SentryAction::MoveTo(Pose {
+    Action(SentryAction::MoveTo(Pose {
         position: Point {
             x: 4.0,
             y: 0.0,
             z: 0.0,
         },
         ..Default::default()
-    })))
+    }))
 }
 fn when_healthy() -> Behavior<SentryAction> {
     WhenAll(vec![
@@ -42,12 +45,12 @@ fn when_healthy() -> Behavior<SentryAction> {
 }
 
 fn move_to_supply() -> Behavior<SentryAction> {
-    Box::new(Action(SentryAction::MoveTo(Pose {
+    Action(SentryAction::MoveTo(Pose {
         position: Point {
             x: 0.0,
             y: 0.0,
             z: 0.0,
         },
         ..Default::default()
-    })))
+    }))
 }

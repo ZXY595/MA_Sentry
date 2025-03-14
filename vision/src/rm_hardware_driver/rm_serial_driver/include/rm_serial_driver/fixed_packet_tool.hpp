@@ -53,6 +53,7 @@ public:
   void enbaleRealtimeSend(bool enable);
   void enbaleDataPrint(bool enable) { use_data_print_ = enable; }
   bool sendPacket(const FixedPacket<capacity> &packet);
+  bool sendPacket(const FixedPacket<capacity/2> &packet);
   bool recvPacket(FixedPacket<capacity> &packet);
 
   std::string getErrorMessage() { return transporter_->errorMessage(); }
@@ -60,6 +61,7 @@ public:
 private:
   bool checkPacket(uint8_t *tmp_buffer, int recv_len);
   bool simpleSendPacket(const FixedPacket<capacity> &packet);
+  bool simpleSendPacket(const FixedPacket<capacity/2> &packet);
 
 private:
   std::shared_ptr<TransporterInterface> transporter_;
@@ -114,6 +116,31 @@ bool FixedPacketTool<capacity>::simpleSendPacket(const FixedPacket<capacity> &pa
   }
 }
 
+template<int capacity>
+bool FixedPacketTool<capacity>::simpleSendPacket(const FixedPacket<capacity/2> &packet) {
+
+  // std::ostringstream oss;
+  // const unsigned char *data = packet.buffer();
+  // for(int i = 0 ; i<capacity;++i)
+  // {
+  //   oss<<std::hex<<std::uppercase <<std::setfill('0')<<static_cast<int>(data[i])<<" ";
+  // }
+  // FYT_INFO("serial_driver","Sending packet data: %s", oss.str().c_str());
+  // printf("serial_driver : Sending packet data: %s", oss.str().c_str());
+
+  if (transporter_->write(packet.buffer(), 16) == 16) {
+    // FYT_ERROR("serial_driver", "transporter_->write() ");
+    return true;
+  } else {
+    // reconnect
+    FYT_ERROR("serial_driver", "transporter_->write() failed");
+  
+    transporter_->close();
+    transporter_->open();
+    return false;
+  }
+}
+
 template <int capacity>
 void FixedPacketTool<capacity>::enbaleRealtimeSend(bool enable) {
   if (enable == use_realtime_send_) {
@@ -156,6 +183,11 @@ bool FixedPacketTool<capacity>::sendPacket(const FixedPacket<capacity> &packet) 
   } else {
     return simpleSendPacket(packet);
   }
+}
+
+template <int capacity>
+bool FixedPacketTool<capacity>::sendPacket(const FixedPacket<capacity/2> &packet) {
+  return simpleSendPacket(packet);
 }
 
 template <int capacity>

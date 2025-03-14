@@ -19,6 +19,7 @@ pub enum SentryAction {
     MoveTo(Pose),
     // CancelMoving,
     SpinArmor,
+    UntilGameStarted,
     UntilGameOver,
     UntilIsAlive,
     IsGameStarted,
@@ -41,7 +42,6 @@ impl SentryAction {
                 move_to::move_to_pose(
                     Arc::clone(&state.nav_client),
                     pose.clone(),
-                    Arc::clone(&state.moving_goal_handle),
                 ),
             ),
             // SentryAction::CancelMoving => wrap_async_task(
@@ -53,8 +53,18 @@ impl SentryAction {
                 .is_game_started()
                 .into_status(|| log::info!("Game is started")),
             SentryAction::Idle => Status::Success,
+
+            SentryAction::UntilGameStarted => {
+                if let Poll::Ready(true) = state.is_game_started() {
+                    log::info!("Game is started");
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
             SentryAction::UntilGameOver => {
                 if let Poll::Ready(false) = state.is_game_started() {
+                    log::info!("Game is over");
                     Status::Success
                 } else {
                     Status::Running
@@ -69,7 +79,8 @@ impl SentryAction {
                 .map(|hp| hp <= 0)
                 .into_status(|| log::info!("Sentry is dead")),
             SentryAction::UntilIsAlive => {
-                if let Poll(true) = state.get_hp().map(hp > 0) {
+                if let Poll::Ready(true) = state.get_hp().map(|hp|hp > 0) {
+                    log::info!("Sentry is alive");
                     Status::Success
                 } else {
                     Status::Running
@@ -110,11 +121,21 @@ pub struct SentryState {
 }
 
 /// A struct that is shared across non behavior tree tasks
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct SyncState {
     pub is_game_started: Arc<RwLock<bool>>,
     pub hp: Arc<RwLock<i32>>,
     pub ammo: Arc<RwLock<u32>>,
+}
+
+impl Default for SyncState {
+    fn default() -> Self {
+        Self {
+            is_game_started: Arc::new(RwLock::new(false)),
+            hp: Arc::new(RwLock::new(0)),
+            ammo: Arc::new(RwLock::new(0)),
+        }
+    }
 }
 
 impl SentryState {

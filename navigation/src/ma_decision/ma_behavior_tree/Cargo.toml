@@ -8,10 +8,10 @@ anyhow.workspace = true
 bonsai-bt = {version = "0.10.0", features = ["visualize"]}
 r2r.workspace = true
 serde = { version = "1.0", features = ["derive"] }
-tokio = {workspace = true, features = ["sync", "time"]}
+tokio = {workspace = true, features = ["sync", "time", "rt-multi-thread"]}
 env_logger = "0.11"
 log = "0.4"
-tokio-stream = "0.1.17"
+futures-util = "0.3"
 
 [[bin]]
 name = "ma_bt"

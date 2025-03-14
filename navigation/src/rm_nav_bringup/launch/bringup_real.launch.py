@@ -345,19 +345,19 @@ def generate_launch_description():
             'nav_rviz': use_nav_rviz}.items()
     )
 
-    nav_serial = Node(
-        package="rmoss_base",
-        executable="simple_robot_base",
-        name="nav_serial",
-        output='screen',
-    )
+    #nav_serial = Node(
+    #    package="rmoss_base",
+    #    executable="simple_robot_base",
+    #    name="nav_serial",
+    #    output='screen',
+    #)
 
-    nav_goal_publisher = Node(
-        package="my_nav_goal_publisher",
-        executable="my_nav_goal_publisher",
-        name="nav_goal_publisher",
-        output="screen",
-    )
+    # nav_goal_publisher = Node(
+    #     package="my_nav_goal_publisher",
+    #     executable="my_nav_goal_publisher",
+    #     name="nav_goal_publisher",
+    #     output="screen",
+    # )
 
     ld = LaunchDescription()
 
@@ -380,7 +380,7 @@ def generate_launch_description():
     ld.add_action(bringup_fake_vel_transform_node)
     ld.add_action(start_mapping)
     ld.add_action(start_navigation2)
-    ld.add_action(nav_goal_publisher)
+    #ld.add_action(nav_goal_publisher)
     #ld.add_action(nav_serial)
 
     return ld
