@@ -13,13 +13,14 @@ use tokio::{
 };
 
 mod move_to;
-mod spin;
 
 #[derive(Debug, Clone)]
 pub enum SentryAction {
     MoveTo(Pose),
-    CancelMoving,
+    // CancelMoving,
     SpinArmor,
+    UntilGameOver,
+    UntilIsAlive,
     IsGameStarted,
     IsGameOver,
     IsDead,
@@ -29,7 +30,6 @@ pub enum SentryAction {
 
     IsHpGreaterThan(i32),
     IsAmmoGreaterThan(u32),
-    IsEngagingEmemy,
     Idle,
 }
 
@@ -44,15 +44,22 @@ impl SentryAction {
                     Arc::clone(&state.moving_goal_handle),
                 ),
             ),
-            SentryAction::CancelMoving => wrap_async_task(
-                &mut state.cancelling_status,
-                move_to::cancel_moving(Arc::clone(&state.moving_goal_handle)),
-            ),
+            // SentryAction::CancelMoving => wrap_async_task(
+            //     &mut state.cancelling_status,
+            //     move_to::cancel_moving(Arc::clone(&state.moving_goal_handle)),
+            // ),
             SentryAction::SpinArmor => todo!(),
             SentryAction::IsGameStarted => state
                 .is_game_started()
                 .into_status(|| log::info!("Game is started")),
             SentryAction::Idle => Status::Success,
+            SentryAction::UntilGameOver => {
+                if let Poll::Ready(false) = state.is_game_started() {
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
             SentryAction::IsGameOver => state
                 .is_game_started()
                 .map(Not::not)
@@ -61,6 +68,13 @@ impl SentryAction {
                 .get_hp()
                 .map(|hp| hp <= 0)
                 .into_status(|| log::info!("Sentry is dead")),
+            SentryAction::UntilIsAlive => {
+                if let Poll(true) = state.get_hp().map(hp > 0) {
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
             SentryAction::IsAlive => state
                 .get_hp()
                 .map(|hp| hp > 0)
@@ -81,9 +95,6 @@ impl SentryAction {
                 .get_ammo()
                 .map(|ammo| ammo > *min)
                 .into_status(|| log::info!("Sentry ammo is greater than {}", min)),
-            SentryAction::IsEngagingEmemy => state
-                .is_engaging_ememy()
-                .into_status(|| log::info!("Engaging ememy!")),
         };
         (status, dt)
     }
@@ -93,19 +104,17 @@ pub struct SentryState {
     sync_state: SyncState,
     nav_client: Arc<ActionClient<NavigateToPose::Action>>,
     moving_status: Option<oneshot::Receiver<TaskStatus>>,
-    /// for cancelling the goal
-    moving_goal_handle: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
-    cancelling_status: Option<oneshot::Receiver<TaskStatus>>,
+    // for cancelling the goal
+    // moving_goal_handle: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
+    // cancelling_status: Option<oneshot::Receiver<TaskStatus>>,
 }
 
 /// A struct that is shared across non behavior tree tasks
 #[derive(Clone, Default)]
 pub struct SyncState {
     pub is_game_started: Arc<RwLock<bool>>,
-    pub is_engaging_enemy: Arc<RwLock<bool>>,
     pub hp: Arc<RwLock<i32>>,
     pub ammo: Arc<RwLock<u32>>,
-    pub vision_yaw: Arc<RwLock<f64>>,
 }
 
 impl SentryState {
@@ -116,8 +125,6 @@ impl SentryState {
                 sync_state: sync_state.clone(),
                 nav_client: Arc::new(client),
                 moving_status: None,
-                moving_goal_handle: Default::default(),
-                cancelling_status: Default::default(),
             },
             sync_state,
         )
@@ -127,17 +134,6 @@ impl SentryState {
     pub fn is_game_started(&self) -> Poll<bool> {
         self.sync_state
             .is_game_started
-            .try_read()
-            .ok()
-            .map(|x| *x)
-            .into_poll()
-    }
-
-    /// Pending if the lock is currently held by an exclusive writer.
-    #[inline]
-    pub fn is_engaging_ememy(&self) -> Poll<bool> {
-        self.sync_state
-            .is_engaging_enemy
             .try_read()
             .ok()
             .map(|x| *x)
@@ -182,6 +178,17 @@ impl IntoStatus for Poll<bool> {
                 Status::Success
             }
             Poll::Ready(false) => Status::Failure,
+            Poll::Pending => Status::Running,
+        }
+    }
+}
+impl IntoStatus for Poll<()> {
+    fn into_status(self, when_success: impl FnOnce()) -> Status {
+        match self {
+            Poll::Ready(_) => {
+                when_success();
+                Status::Success
+            }
             Poll::Pending => Status::Running,
         }
     }

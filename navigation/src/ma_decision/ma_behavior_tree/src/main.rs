@@ -25,15 +25,12 @@ fn main() -> Result<(), anyhow::Error> {
         QosProfile::default(),
     )?;
 
-    let vision_stream = node.subscribe::<rm_interfaces::msg::GimbalCmd>(
-        "/armor_solver/cmd_gimbal",
-        QosProfile::default(),
-    )?;
-
     let client = node.create_action_client("/navigate_to_pose")?;
     let (mut sentry_state, sync_state) = SentryState::new(client);
 
     let mut behavior_tree = BT::new(behavior, ());
+    let graph_viz = behavior_tree.get_graphviz();
+    log::info!("{graph_viz}");
 
     runtime.spawn(async move {
         let mut pin_serial = pin!(serial_stream);
@@ -49,21 +46,6 @@ fn main() -> Result<(), anyhow::Error> {
             }
             if cached_game_started.update(data.judge_system_data.game_status == 1) {
                 *sync_state.is_game_started.write().await = cached_game_started.0;
-            }
-        }
-    });
-
-    runtime.spawn(async move {
-        let mut pin_vision = pin!(vision_stream);
-        let mut cached_is_engaging_ememy = UpdateDetecter(false);
-        let mut cached_vision_yaw = UpdateDetecter(0.0);
-        while let Some(data) = pin_vision.next().await {
-            if cached_vision_yaw.update(data.yaw) {
-                *sync_state.vision_yaw.write().await = cached_vision_yaw.0;
-            }
-            let is_engaging_ememy = data.distance.is_sign_positive();
-            if cached_is_engaging_ememy.update(is_engaging_ememy) {
-                *sync_state.is_engaging_enemy.write().await = cached_is_engaging_ememy.0;
             }
         }
     });

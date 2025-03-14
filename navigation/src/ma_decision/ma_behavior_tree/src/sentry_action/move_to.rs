@@ -20,7 +20,10 @@ pub async fn move_to_pose(
         },
         pose,
     };
-    send_navigate_to_pose(client.deref(), goal, goal_handle_state).await?;
+    while let Err(e) = send_navigate_to_pose(client.deref(), goal, goal_handle_state).await {
+        log::error!("Failed to send goal: {:?}, retrying...");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
     Ok(())
 }
 
