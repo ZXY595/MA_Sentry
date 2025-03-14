@@ -1,2 +1,4 @@
 [env]
 RUST_LOG = "INFO"
+IDL_PACKAGE_FILTER = { value = "std_msgs;geometry_msgs;nav2_msgs;rm_interfaces" }
+#AMENT_PREFIX_PATH = "/home/ma/MA_Sentry/navigation/install/rm_interfaces"

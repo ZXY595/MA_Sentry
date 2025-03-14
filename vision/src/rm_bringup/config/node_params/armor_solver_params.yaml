@@ -39,7 +39,7 @@
       controller_delay: 0.0
       max_tracking_v_yaw: 60.0 #转速(rad/s)大于这个值时瞄准机器人中心 
       side_angle: 13.0 
-      bullet_speed: 19.6
+      bullet_speed: 23.4
       # bullet_speed: 10000.0
       compenstator_type: "ideal"
       gravity: 10.0

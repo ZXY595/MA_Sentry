@@ -1,16 +1,18 @@
 mod behavior;
 mod sentry_action;
 
-use std::time::Duration;
+use std::{pin::pin, time::Duration};
 
 use bonsai_bt::{BT, Event, Timer, UpdateArgs};
+use r2r::{QosProfile, rm_interfaces};
 use sentry_action::SentryState;
 use tokio::task;
+use tokio_stream::StreamExt;
 
 fn main() -> Result<(), anyhow::Error> {
     // env_logger::init();
     let ctx = r2r::Context::create()?;
-    let mut node = r2r::Node::create(ctx, "ma_behavior_tree", "/")?;
+    let mut node = r2r::Node::create(ctx, "behavior_tree", "/ma")?;
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -18,10 +20,53 @@ fn main() -> Result<(), anyhow::Error> {
 
     let behavior = behavior::get_behavior();
 
+    let serial_stream = node.subscribe::<rm_interfaces::msg::SerialReceiveData>(
+        "serial/receive",
+        QosProfile::default(),
+    )?;
+
+    let vision_stream = node.subscribe::<rm_interfaces::msg::GimbalCmd>(
+        "/armor_solver/cmd_gimbal",
+        QosProfile::default(),
+    )?;
+
     let client = node.create_action_client("/navigate_to_pose")?;
-    let mut sentry_state = SentryState::new(client);
+    let (mut sentry_state, sync_state) = SentryState::new(client);
 
     let mut behavior_tree = BT::new(behavior, ());
+
+    runtime.spawn(async move {
+        let mut pin_serial = pin!(serial_stream);
+        let mut cached_hp = UpdateDetecter(0);
+        let mut cached_ammo = UpdateDetecter(0);
+        let mut cached_game_started = UpdateDetecter(false);
+        while let Some(data) = pin_serial.next().await {
+            if cached_hp.update(data.judge_system_data.hp as i32) {
+                *sync_state.hp.write().await = cached_hp.0;
+            }
+            if cached_ammo.update(data.judge_system_data.ammo as u32) {
+                *sync_state.ammo.write().await = cached_ammo.0;
+            }
+            if cached_game_started.update(data.judge_system_data.game_status == 1) {
+                *sync_state.is_game_started.write().await = cached_game_started.0;
+            }
+        }
+    });
+
+    runtime.spawn(async move {
+        let mut pin_vision = pin!(vision_stream);
+        let mut cached_is_engaging_ememy = UpdateDetecter(false);
+        let mut cached_vision_yaw = UpdateDetecter(0.0);
+        while let Some(data) = pin_vision.next().await {
+            if cached_vision_yaw.update(data.yaw) {
+                *sync_state.vision_yaw.write().await = cached_vision_yaw.0;
+            }
+            let is_engaging_ememy = data.distance.is_sign_positive();
+            if cached_is_engaging_ememy.update(is_engaging_ememy) {
+                *sync_state.is_engaging_enemy.write().await = cached_is_engaging_ememy.0;
+            }
+        }
+    });
 
     runtime.block_on(async move {
         let mut timer = Timer::init_time();
@@ -29,11 +74,27 @@ fn main() -> Result<(), anyhow::Error> {
             let event = Event::from(UpdateArgs { dt: timer.get_dt() });
             behavior_tree.tick(&event, &mut |event, _| {
                 let dt = event.dt;
-                (event.action.tick(&mut sentry_state, dt), dt)
+                event.action.tick(&mut sentry_state, dt)
             });
             node.spin_once(Duration::from_millis(50));
             task::yield_now().await;
         }
     });
     Ok(())
+}
+
+struct UpdateDetecter<T>(pub T);
+
+impl<T> UpdateDetecter<T>
+where
+    T: PartialEq,
+{
+    pub fn update(&mut self, data: T) -> bool {
+        if self.0 != data {
+            self.0 = data;
+            true
+        } else {
+            false
+        }
+    }
 }

@@ -21,7 +21,7 @@
 namespace fyt::serial_driver::protocol {
 ProtocolSentry::ProtocolSentry(std::string_view port_name, bool enable_data_print) {
   auto uart_transporter = std::make_shared<UartTransporter>(std::string(port_name));
-  packet_tool_ = std::make_shared<FixedPacketTool<16>>(uart_transporter);
+  packet_tool_ = std::make_shared<FixedPacketTool<32>>(uart_transporter);
   packet_tool_->enbaleDataPrint(enable_data_print);
 }
 
@@ -97,8 +97,10 @@ bool ProtocolSentry::receive(rm_interfaces::msg::SerialReceiveData &data) {
     packet.unloadData(data.roll, 2);
     packet.unloadData(data.pitch, 6);
     packet.unloadData(data.yaw, 10);
-    packet.unloadData(data.judge_system_data.ammo, 14);
-    packet.unloadData(data.judge_system_data.hp, 14);
+
+    packet.unloadData(data.judge_system_data.game_status, 14);
+    packet.unloadData(data.judge_system_data.ammo, 15);
+    packet.unloadData(data.judge_system_data.hp, 17);
     // packet.unloadData(data.pitch, 2);
     // packet.unloadData(data.yaw, 6);
     // // 实际上是底盘角度
