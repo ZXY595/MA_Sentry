@@ -60,16 +60,35 @@
 
 3. 安装依赖
 
-    ```sh
-    cd pb_rmsimulation
+    rust代理设置(非必须)
+    在.bashrc加入rustup代理:
+    ```bash
+    export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+    export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup
+    ```
 
-    rosdep install -r --from-paths src --ignore-src --rosdistro $ROS_DISTRO -y
+    然后在.cargo/config.toml(没有这个文件就创建一个)里加入cargo代理：
+    ```toml
+    [source.crates-io]
+    replace-with = 'rsproxy-sparse'
+    [source.rsproxy]
+    registry = "https://rsproxy.cn/crates.io-index"
+    [source.rsproxy-sparse]
+    registry = "sparse+https://rsproxy.cn/index/"
+    [registries.rsproxy]
+    index = "https://rsproxy.cn/crates.io-index"
+    [net]
+    git-fetch-with-cli = true
+    ```
+
+    ```sh
+    . prebuild.sh
     ```
 
 4. 编译
 
     ```sh
-    colcon build --symlink-install
+    . build.sh
     ```
 
 ## 三. 运行

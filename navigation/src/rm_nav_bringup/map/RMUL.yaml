@@ -1,4 +1,4 @@
-image: rmul_2025.pgm
+image: RMUL.pgm
 mode: trinary
 resolution: 0.05
 origin: [-1.25, -7.55, 0]

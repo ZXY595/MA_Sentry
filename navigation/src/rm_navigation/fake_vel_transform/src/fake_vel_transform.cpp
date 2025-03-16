@@ -72,8 +72,8 @@ void FakeVelTransform::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr
     geometry_msgs::msg::Twist aft_tf_vel;
     //aft_tf_vel.angular.z = (msg->angular.z != 0) ? spin_speed_ : 0;
     aft_tf_vel.angular.z = 0;
-    aft_tf_vel.linear.x = 0.08*(msg->linear.x * cos(angle_diff) + msg->linear.y * sin(angle_diff));
-    aft_tf_vel.linear.y = 0.08*(-(-msg->linear.x * sin(angle_diff) + msg->linear.y * cos(angle_diff)));
+    aft_tf_vel.linear.x = 0.12*(msg->linear.x * cos(angle_diff) + msg->linear.y * sin(angle_diff));
+    aft_tf_vel.linear.y = 0.12*(-(-msg->linear.x * sin(angle_diff) + msg->linear.y * cos(angle_diff)));
 
     cmd_vel_chassis_pub_->publish(aft_tf_vel);
   } catch (tf2::TransformException & ex) {

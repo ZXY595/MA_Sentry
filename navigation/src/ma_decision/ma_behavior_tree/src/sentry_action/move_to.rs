@@ -67,19 +67,19 @@ pub async fn send_navigate_to_pose(
         .ok_or(anyhow::anyhow!("Goal failed"))
 }
 
-pub async fn cancel_moving(
-    goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
-) -> Result<(), anyhow::Error> {
-    {
-        goal_handle_state
-            .lock()
-            .await
-            .as_ref()
-            .ok_or(anyhow::anyhow!(
-                "Attemping to cancel the goal but found no goal_handle."
-            ))?
-            .cancel()?
-            .await?
-    }
-    Ok(())
-}
+// pub async fn cancel_moving(
+//     goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
+// ) -> Result<(), anyhow::Error> {
+//     {
+//         goal_handle_state
+//             .lock()
+//             .await
+//             .as_ref()
+//             .ok_or(anyhow::anyhow!(
+//                 "Attemping to cancel the goal but found no goal_handle."
+//             ))?
+//             .cancel()?
+//             .await?
+//     }
+//     Ok(())
+// }

@@ -1,16 +1,16 @@
-use std::{ops::Not, sync::Arc, task::Poll};
+use std::{sync::Arc, task::Poll};
 
 use bonsai_bt::Status;
-use r2r::{
-    ActionClient, ActionClientGoal, geometry_msgs::msg::Pose, nav2_msgs::action::NavigateToPose,
-};
+use r2r::{ActionClient, geometry_msgs::msg::Pose, nav2_msgs::action::NavigateToPose};
 use tokio::{
     sync::{
-        Mutex, RwLock,
+        RwLock,
         oneshot::{self, error::TryRecvError},
     },
     task,
 };
+
+use crate::behavior::LOWHP_THRESHOLD;
 
 mod move_to;
 
@@ -18,20 +18,13 @@ mod move_to;
 pub enum SentryAction {
     MoveTo(Pose),
     // CancelMoving,
-    SpinArmor,
+    // SpinArmor,
     UntilGameStarted,
     UntilGameOver,
     UntilIsAlive,
-    IsGameStarted,
-    IsGameOver,
-    IsDead,
-    IsAlive,
-    IsHpLessThan(i32),
-    IsAmmoLessThan(u32),
-
+    UntilIsLowHp,
     IsHpGreaterThan(i32),
-    IsAmmoGreaterThan(u32),
-    Idle,
+    // IsAmmoGreaterThan(u32),
 }
 
 impl SentryAction {
@@ -39,21 +32,8 @@ impl SentryAction {
         let status = match self {
             SentryAction::MoveTo(pose) => wrap_async_task(
                 &mut state.moving_status,
-                move_to::move_to_pose(
-                    Arc::clone(&state.nav_client),
-                    pose.clone(),
-                ),
+                move_to::move_to_pose(Arc::clone(&state.nav_client), pose.clone()),
             ),
-            // SentryAction::CancelMoving => wrap_async_task(
-            //     &mut state.cancelling_status,
-            //     move_to::cancel_moving(Arc::clone(&state.moving_goal_handle)),
-            // ),
-            SentryAction::SpinArmor => todo!(),
-            SentryAction::IsGameStarted => state
-                .is_game_started()
-                .into_status(|| log::info!("Game is started")),
-            SentryAction::Idle => Status::Success,
-
             SentryAction::UntilGameStarted => {
                 if let Poll::Ready(true) = state.is_game_started() {
                     log::info!("Game is started");
@@ -70,42 +50,27 @@ impl SentryAction {
                     Status::Running
                 }
             }
-            SentryAction::IsGameOver => state
-                .is_game_started()
-                .map(Not::not)
-                .into_status(|| log::info!("Game is over")),
-            SentryAction::IsDead => state
-                .get_hp()
-                .map(|hp| hp <= 0)
-                .into_status(|| log::info!("Sentry is dead")),
             SentryAction::UntilIsAlive => {
-                if let Poll::Ready(true) = state.get_hp().map(|hp|hp > 0) {
+                if let Poll::Ready(true) = state.get_hp().map(|hp| hp > 0) {
                     log::info!("Sentry is alive");
                     Status::Success
                 } else {
                     Status::Running
                 }
             }
-            SentryAction::IsAlive => state
-                .get_hp()
-                .map(|hp| hp > 0)
-                .into_status(|| log::info!("Sentry is dead")),
-            SentryAction::IsHpLessThan(max) => state
-                .get_hp()
-                .map(|hp| hp <= *max)
-                .into_status(|| log::info!("Sentry hp is less than {}", max)),
-            SentryAction::IsAmmoLessThan(max) => state
-                .get_ammo()
-                .map(|ammo| ammo <= *max)
-                .into_status(|| log::info!("Sentry ammo is less than {}", max)),
+
+            SentryAction::UntilIsLowHp => {
+                if let Poll::Ready(true) = state.get_hp().map(|hp| hp <= LOWHP_THRESHOLD) {
+                    log::info!("Sentry is low hp");
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
             SentryAction::IsHpGreaterThan(min) => state
                 .get_hp()
                 .map(|hp| hp > *min)
                 .into_status(|| log::info!("Sentry hp is greater than {}", min)),
-            SentryAction::IsAmmoGreaterThan(min) => state
-                .get_ammo()
-                .map(|ammo| ammo > *min)
-                .into_status(|| log::info!("Sentry ammo is greater than {}", min)),
         };
         (status, dt)
     }
@@ -167,11 +132,11 @@ impl SentryState {
         self.sync_state.hp.try_read().ok().map(|x| *x).into_poll()
     }
 
-    /// Pending if the lock is currently held by an exclusive writer.
-    #[inline]
-    pub fn get_ammo(&self) -> Poll<u32> {
-        self.sync_state.ammo.try_read().ok().map(|x| *x).into_poll()
-    }
+    // Pending if the lock is currently held by an exclusive writer.
+    // #[inline]
+    // pub fn get_ammo(&self) -> Poll<u32> {
+    //     self.sync_state.ammo.try_read().ok().map(|x| *x).into_poll()
+    // }
 }
 
 trait IntoPoll<T> {
@@ -211,47 +176,6 @@ impl IntoStatus for Poll<()> {
                 Status::Success
             }
             Poll::Pending => Status::Running,
-        }
-    }
-}
-
-trait IntoStatusThen<T> {
-    fn into_status_then(self, when_success: impl FnOnce(T)) -> Status;
-}
-
-impl<T> IntoStatusThen<T> for Poll<Option<T>> {
-    fn into_status_then(self, when_success: impl FnOnce(T)) -> Status {
-        match self {
-            Poll::Ready(Some(x)) => {
-                when_success(x);
-                Status::Success
-            }
-            Poll::Ready(None) => Status::Failure,
-            Poll::Pending => Status::Running,
-        }
-    }
-}
-
-impl<T> IntoStatusThen<T> for Poll<T> {
-    fn into_status_then(self, when_success: impl FnOnce(T)) -> Status {
-        match self {
-            Poll::Ready(x) => {
-                when_success(x);
-                Status::Success
-            }
-            Poll::Pending => Status::Running,
-        }
-    }
-}
-
-impl<T> IntoStatusThen<T> for Option<T> {
-    fn into_status_then(self, when_success: impl FnOnce(T)) -> Status {
-        match self {
-            Some(x) => {
-                when_success(x);
-                Status::Success
-            }
-            None => Status::Failure,
         }
     }
 }

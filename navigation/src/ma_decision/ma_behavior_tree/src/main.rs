@@ -6,8 +6,9 @@ use std::{pin::pin, time::Duration};
 use bonsai_bt::{BT, Event, Timer, UpdateArgs};
 use r2r::{QosProfile, qos, rm_interfaces};
 use sentry_action::SentryState;
-use tokio::{task, time};
+use tokio::task;
 use futures_util::StreamExt;
+
 
 fn main() -> Result<(), anyhow::Error> {
     env_logger::init();
@@ -47,7 +48,7 @@ fn main() -> Result<(), anyhow::Error> {
             if cached_ammo.update(data.judge_system_data.ammo as u32) {
                 *sync_state.ammo.write().await = cached_ammo.0;
             }
-            if cached_game_started.update(data.judge_system_data.game_status == 1) {
+            if cached_game_started.update(data.judge_system_data.game_status == 4) {
                 *sync_state.is_game_started.write().await = cached_game_started.0;
             }
         }
@@ -62,7 +63,6 @@ fn main() -> Result<(), anyhow::Error> {
                 event.action.tick(&mut sentry_state, dt)
             });
             node.spin_once(Duration::from_millis(100));
-            // time::sleep(Duration::from_millis(50)).await;
             task::yield_now().await;
         }
     });

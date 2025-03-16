@@ -16,17 +16,28 @@
       # r_z: 9e-4
       # r_yaw: 5e-3
 
+      # sigma2_q_x: 0.05
+      # sigma2_q_y: 0.05
+      # sigma2_q_z: 0.05
+      # sigma2_q_yaw: 0.2
+      # sigma2_q_r: 120.0
+
+      # r_x: 4e-4
+      # r_y: 4e-4
+      # r_z: 9e-4
+      # r_yaw: 1e-2
+ 
+
       sigma2_q_x: 0.05
       sigma2_q_y: 0.05
       sigma2_q_z: 0.05
-      sigma2_q_yaw: 0.2
+      sigma2_q_yaw: 1.0
       sigma2_q_r: 120.0
 
       r_x: 4e-4
       r_y: 4e-4
       r_z: 9e-4
-      r_yaw: 1e-2
-
+      r_yaw: 1e-5
     tracker:
       max_match_distance: 0.5
       max_match_yaw_diff: 1.0
@@ -57,3 +68,4 @@
         "7.0 8.0  0.4 0.8 0.0",
         "7.0 8.0  0.8 1.2 0.0",
       ]
+
