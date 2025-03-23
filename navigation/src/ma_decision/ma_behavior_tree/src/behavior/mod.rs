@@ -2,17 +2,20 @@ use bonsai_bt::Behavior::{self, *};
 use r2r::geometry_msgs::msg::{Point, Pose};
 
 use crate::sentry_action::SentryAction;
-pub const LOWHP_THRESHOLD: i32 = 110;
-const MOVING_SPREAD: f64 = 0.45;
+pub const LOW_HP_THRESHOLD: i32 = 110;
+pub const HIGH_HP_THRESHOLD: i32 = 399;
+
 const BUFF_POINT: Point = Point {
-    x: 4.5,
-    y: -4.0,
+    x: 3.5,
+    y: 5.3,
+    // x: 1.0,
+    // y: 0.0,
     z: 0.0,
 };
 
 const BASE_POINT: Point = Point {
-    x: -0.1,
-    y: -0.9,
+    x: 0.0,
+    y: 0.0,
     z: 0.0,
 };
 pub fn get_behavior() -> Behavior<SentryAction> {
@@ -34,7 +37,7 @@ fn alive_task() -> Behavior<SentryAction> {
 
 fn attack_move_to_buff_area_and_retreat() -> Behavior<SentryAction> {
     If(
-        Box::new(Action(SentryAction::IsHpGreaterThan(LOWHP_THRESHOLD))),
+        Box::new(Action(SentryAction::IsHpGreaterThan(LOW_HP_THRESHOLD))),
         Box::new(move_to_buff_area()),
         Box::new(move_to_supply()),
     )
@@ -42,13 +45,20 @@ fn attack_move_to_buff_area_and_retreat() -> Behavior<SentryAction> {
 
 fn move_to_buff_area() -> Behavior<SentryAction> {
     WhenAny(vec![
-        Sequence(vec![Action(SentryAction::UntilIsLowHp), move_to_supply()]),
-        move_to_point(get_rand_point(&BUFF_POINT)),
+        Sequence(vec![
+            Action(SentryAction::UntilIsHpLessThan(LOW_HP_THRESHOLD)),
+            Action(SentryAction::CancelMoving),
+            move_to_supply(),
+        ]),
+        move_to_random_point(BUFF_POINT),
     ])
 }
 
 fn move_to_supply() -> Behavior<SentryAction> {
-    move_to_point(BASE_POINT)
+    Sequence(vec![
+        move_to_point(BASE_POINT),
+        Action(SentryAction::UntilIsHpGreaterThan(HIGH_HP_THRESHOLD)),
+    ])
 }
 
 fn move_to_point(point: Point) -> Behavior<SentryAction> {
@@ -58,10 +68,9 @@ fn move_to_point(point: Point) -> Behavior<SentryAction> {
     }))
 }
 
-fn get_rand_point(point: &Point) -> Point {
-    Point {
-        x: point.x + rand::random_range(-MOVING_SPREAD..MOVING_SPREAD),
-        y: point.y + rand::random_range(-MOVING_SPREAD..MOVING_SPREAD),
-        z: point.z,
-    }
+fn move_to_random_point(point: Point) -> Behavior<SentryAction> {
+    Action(SentryAction::RandomMoveTo(Pose {
+        position: point,
+        ..Default::default()
+    }))
 }

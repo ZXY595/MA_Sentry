@@ -1,0 +1,13 @@
+/small_gicp_relocalization:
+  ros__parameters:
+    use_sim_time: false
+    num_threads: 4
+    num_neighbors: 20
+    global_leaf_size: 0.15
+    registered_leaf_size: 0.05
+    max_dist_sq: 3.0
+    map_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_link"
+    lidar_frame: "livox_frame"
+    robot_base_frame: "gimbal_link"

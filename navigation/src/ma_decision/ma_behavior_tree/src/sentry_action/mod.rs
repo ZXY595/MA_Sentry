@@ -1,28 +1,34 @@
 use std::{sync::Arc, task::Poll};
 
 use bonsai_bt::Status;
-use r2r::{ActionClient, geometry_msgs::msg::Pose, nav2_msgs::action::NavigateToPose};
+use r2r::{
+    ActionClient, ActionClientGoal,
+    geometry_msgs::msg::{Point, Pose},
+    nav2_msgs::action::NavigateToPose,
+};
 use tokio::{
     sync::{
-        RwLock,
+        Mutex, RwLock,
         oneshot::{self, error::TryRecvError},
     },
     task,
 };
 
-use crate::behavior::LOWHP_THRESHOLD;
-
 mod move_to;
+
+const MOVING_SPREAD: f64 = 0.01;
 
 #[derive(Debug, Clone)]
 pub enum SentryAction {
     MoveTo(Pose),
-    // CancelMoving,
+    RandomMoveTo(Pose),
+    CancelMoving,
     // SpinArmor,
     UntilGameStarted,
     UntilGameOver,
     UntilIsAlive,
-    UntilIsLowHp,
+    UntilIsHpLessThan(i32),
+    UntilIsHpGreaterThan(i32),
     IsHpGreaterThan(i32),
     // IsAmmoGreaterThan(u32),
 }
@@ -32,7 +38,15 @@ impl SentryAction {
         let status = match self {
             SentryAction::MoveTo(pose) => wrap_async_task(
                 &mut state.moving_status,
-                move_to::move_to_pose(Arc::clone(&state.nav_client), pose.clone()),
+                move_to::move_to_pose(
+                    Arc::clone(&state.nav_client),
+                    Arc::clone(&state.moving_goal_handle),
+                    pose.clone(),
+                ),
+            ),
+            SentryAction::CancelMoving => wrap_async_task(
+                &mut state.cancelling_status,
+                move_to::cancel_moving(Arc::clone(&state.moving_goal_handle)),
             ),
             SentryAction::UntilGameStarted => {
                 if let Poll::Ready(true) = state.is_game_started() {
@@ -58,10 +72,17 @@ impl SentryAction {
                     Status::Running
                 }
             }
-
-            SentryAction::UntilIsLowHp => {
-                if let Poll::Ready(true) = state.get_hp().map(|hp| hp <= LOWHP_THRESHOLD) {
+            SentryAction::UntilIsHpLessThan(max) => {
+                if let Poll::Ready(true) = state.get_hp().map(|hp| hp < *max) {
                     log::info!("Sentry is low hp");
+                    Status::Success
+                } else {
+                    Status::Running
+                }
+            }
+            SentryAction::UntilIsHpGreaterThan(min) => {
+                if let Poll::Ready(true) = state.get_hp().map(|hp| hp >= *min) {
+                    log::info!("Sentry is high hp");
                     Status::Success
                 } else {
                     Status::Running
@@ -69,10 +90,29 @@ impl SentryAction {
             }
             SentryAction::IsHpGreaterThan(min) => state
                 .get_hp()
-                .map(|hp| hp > *min)
+                .map(|hp| hp >= *min)
                 .into_status(|| log::info!("Sentry hp is greater than {}", min)),
+            SentryAction::RandomMoveTo(pose) => wrap_async_task(
+                &mut state.moving_status,
+                move_to::move_to_pose(
+                    Arc::clone(&state.nav_client),
+                    Arc::clone(&state.moving_goal_handle),
+                    get_rand_point(pose),
+                ),
+            ),
         };
         (status, dt)
+    }
+}
+
+fn get_rand_point(pose: &Pose) -> Pose {
+    Pose {
+        position: Point {
+            x: pose.position.x + rand::random_range(-MOVING_SPREAD..MOVING_SPREAD),
+            y: pose.position.y + rand::random_range(-MOVING_SPREAD..MOVING_SPREAD),
+            z: pose.position.z,
+        },
+        orientation: pose.orientation.clone(),
     }
 }
 
@@ -81,8 +121,8 @@ pub struct SentryState {
     nav_client: Arc<ActionClient<NavigateToPose::Action>>,
     moving_status: Option<oneshot::Receiver<TaskStatus>>,
     // for cancelling the goal
-    // moving_goal_handle: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
-    // cancelling_status: Option<oneshot::Receiver<TaskStatus>>,
+    moving_goal_handle: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
+    cancelling_status: Option<oneshot::Receiver<TaskStatus>>,
 }
 
 /// A struct that is shared across non behavior tree tasks
@@ -111,6 +151,8 @@ impl SentryState {
                 sync_state: sync_state.clone(),
                 nav_client: Arc::new(client),
                 moving_status: None,
+                moving_goal_handle: Arc::new(Mutex::new(None)),
+                cancelling_status: None,
             },
             sync_state,
         )
@@ -193,6 +235,7 @@ fn wrap_async_task(
         Err(TryRecvError::Empty) => Status::Running,
         Ok(TaskStatus::Finished) => {
             *task_status = None;
+            log::trace!("Some async task successed");
             Status::Success
         }
         Err(TryRecvError::Closed) | Ok(TaskStatus::Error) => {

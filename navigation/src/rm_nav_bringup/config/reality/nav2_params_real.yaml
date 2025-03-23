@@ -47,6 +47,13 @@ amcl_rclcpp_node:
   ros__parameters:
     use_sim_time: False
 
+behavior_server:
+  ros__parameters:
+    spin:
+      simulate_ahead_time: 0.0
+      max_rotational_vel: 0.0
+      min_rotational_vel: 0.0
+
 bt_navigator:
   ros__parameters:
     use_sim_time: False
@@ -377,9 +384,7 @@ recoveries_server:
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
     cycle_frequency: 2.0
-    recovery_plugins: ["spin", "backup"]
-    spin:
-      plugin: "nav2_recoveries/Spin"
+    recovery_plugins: ["backup"]
     backup:
       plugin: "nav2_recoveries/BackUp"
     global_frame: odom

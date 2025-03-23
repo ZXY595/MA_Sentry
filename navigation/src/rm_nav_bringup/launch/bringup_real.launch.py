@@ -55,9 +55,14 @@ def generate_launch_description():
     nav2_params_file_dir = os.path.join(rm_nav_bringup_dir, 'config', 'reality', 'nav2_params_real.yaml')
     ################################### navigation2 parameters end ####################################
 
+    ################################### gicp_localization parameters start ############################
+    prior_pcd_dir = PathJoinSubstitution([rm_nav_bringup_dir, 'PCD', world]), ".pcd"
+    small_gicp_localization_file_dir = os.path.join(rm_nav_bringup_dir, 'config', 'reality', 'small_gicp_localization_real.yaml')
+    ################################### gicp_localization parameters end ############################
+
     ################################ icp_registration parameters start ################################
-    icp_pcd_dir = PathJoinSubstitution([rm_nav_bringup_dir, 'PCD', world]), ".pcd"
-    icp_registration_params_dir = os.path.join(rm_nav_bringup_dir, 'config', 'simulation', 'icp_registration_sim.yaml')
+    prior_pcd_dir = PathJoinSubstitution([rm_nav_bringup_dir, 'PCD', world]), ".pcd"
+    icp_registration_params_dir = os.path.join(rm_nav_bringup_dir, 'config', 'reality', 'icp_registration_real.yaml')
     ################################# icp_registration parameters end #################################
 
     ############################# pointcloud_downsampling parameters start ############################
@@ -276,6 +281,17 @@ def generate_launch_description():
                     'map_start_pose': [0.0, 0.0, 0.0]}
                 ],
             ),
+            Node(
+                condition = LaunchConfigurationEquals('localization', 'small_gicp'),
+                package="small_gicp_relocalization",
+                executable="small_gicp_relocalization_node",
+                name="small_gicp_relocalization",
+                output="screen",
+                respawn=True,
+                respawn_delay=2.0,
+                parameters=[small_gicp_localization_file_dir, {"prior_pcd_file": prior_pcd_dir}],
+                # arguments=["--ros-args", "--log-level", log_level],
+            ),
 
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(os.path.join(navigation2_launch_dir,'localization_amcl_launch.py')),
@@ -297,7 +313,7 @@ def generate_launch_description():
                         parameters=[
                             icp_registration_params_dir,
                             {'use_sim_time': use_sim_time,
-                                'pcd_path': icp_pcd_dir}
+                                'pcd_path': prior_pcd_dir}
                         ],
                         # arguments=['--ros-args', '--log-level', ['icp_registration:=', 'DEBUG']]
                     )

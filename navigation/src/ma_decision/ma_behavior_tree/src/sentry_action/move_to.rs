@@ -2,14 +2,16 @@ use std::{ops::Deref, sync::Arc, time::Duration};
 
 use futures_util::StreamExt;
 use r2r::{
-    GoalStatus, builtin_interfaces::msg::Time, geometry_msgs::msg::PoseStamped,
+    ActionClientGoal, GoalStatus, builtin_interfaces::msg::Time, geometry_msgs::msg::PoseStamped,
     std_msgs::msg::Header,
 };
+use tokio::sync::Mutex;
 
 use super::*;
 
 pub async fn move_to_pose(
     client: Arc<ActionClient<NavigateToPose::Action>>,
+    goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
     pose: Pose,
 ) -> Result<(), anyhow::Error> {
     log::info!("move to {:?}", &pose);
@@ -20,10 +22,7 @@ pub async fn move_to_pose(
         },
         pose,
     };
-    while let Err(e) = send_navigate_to_pose(client.deref(), goal.clone()).await {
-        log::error!("Failed to send goal: {:?}, retrying...", e);
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
+    send_navigate_to_pose(client.deref(), goal_handle_state, goal.clone()).await?;
     Ok(())
 }
 
@@ -33,6 +32,7 @@ pub async fn move_to_pose(
 /// If the goal fails to be sent, rejected, or not successful, an error is returned.
 pub async fn send_navigate_to_pose(
     client: &ActionClient<NavigateToPose::Action>,
+    goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
     pose: PoseStamped,
 ) -> Result<(), anyhow::Error> {
     let send_goal_future = client.send_goal_request(NavigateToPose::Goal {
@@ -47,6 +47,10 @@ pub async fn send_navigate_to_pose(
         goal_handle.uuid
     );
 
+    {
+        *goal_handle_state.lock().await = Some(goal_handle);
+    }
+
     task::spawn(async {
         feedback_stream
             .for_each(|feedback| async move {
@@ -60,6 +64,10 @@ pub async fn send_navigate_to_pose(
 
     let (status, _result) = result.await?;
 
+    {
+        *goal_handle_state.lock().await = None;
+    }
+
     log::info!("Goal status: {}", status);
 
     matches!(status, GoalStatus::Succeeded)
@@ -67,19 +75,19 @@ pub async fn send_navigate_to_pose(
         .ok_or(anyhow::anyhow!("Goal failed"))
 }
 
-// pub async fn cancel_moving(
-//     goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
-// ) -> Result<(), anyhow::Error> {
-//     {
-//         goal_handle_state
-//             .lock()
-//             .await
-//             .as_ref()
-//             .ok_or(anyhow::anyhow!(
-//                 "Attemping to cancel the goal but found no goal_handle."
-//             ))?
-//             .cancel()?
-//             .await?
-//     }
-//     Ok(())
-// }
+pub async fn cancel_moving(
+    goal_handle_state: Arc<Mutex<Option<ActionClientGoal<NavigateToPose::Action>>>>,
+) -> Result<(), anyhow::Error> {
+    {
+        goal_handle_state
+            .lock()
+            .await
+            .as_ref()
+            .ok_or(anyhow::anyhow!(
+                "Attemping to cancel the goal but found no goal_handle."
+            ))?
+            .cancel()?
+            .await?;
+    }
+    Ok(())
+}

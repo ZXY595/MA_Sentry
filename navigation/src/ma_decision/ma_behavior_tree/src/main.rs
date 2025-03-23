@@ -4,11 +4,10 @@ mod sentry_action;
 use std::{pin::pin, time::Duration};
 
 use bonsai_bt::{BT, Event, Timer, UpdateArgs};
+use futures_util::StreamExt;
 use r2r::{QosProfile, qos, rm_interfaces};
 use sentry_action::SentryState;
 use tokio::task;
-use futures_util::StreamExt;
-
 
 fn main() -> Result<(), anyhow::Error> {
     env_logger::init();
@@ -63,7 +62,7 @@ fn main() -> Result<(), anyhow::Error> {
                 event.action.tick(&mut sentry_state, dt)
             });
             node.spin_once(Duration::from_millis(100));
-            task::yield_now().await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
         }
     });
     Ok(())
