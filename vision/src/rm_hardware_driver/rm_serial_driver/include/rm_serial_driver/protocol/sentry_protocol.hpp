@@ -32,7 +32,8 @@ public:
 
   //void send(const rm_interfaces::msg::ChassisCmd &data);
   void send(const geometry_msgs::msg::Twist &msg);
-
+  void send();
+  
   bool receive(rm_interfaces::msg::SerialReceiveData &data) override;
 
   std::vector<rclcpp::SubscriptionBase::SharedPtr> getSubscriptions(rclcpp::Node::SharedPtr node) override;
@@ -45,8 +46,9 @@ public:
 private:
   enum GameStatus { NOT_START = 0x00, ENEMY_RED = 0x01, ENEMY_BLUE = 0x02 };
   FixedPacketTool<32>::SharedPtr packet_tool_;
-  FixedPacket<16> packet_;
-  rm_interfaces::msg::ChassisCmd chassis_cmd_;
+  FixedPacket<32> packet_;
+  geometry_msgs::msg::Twist nav_data_;
+  rm_interfaces::msg::GimbalCmd vision_data_;
 };
 }  // namespace fyt::serial_driver::protocol
 

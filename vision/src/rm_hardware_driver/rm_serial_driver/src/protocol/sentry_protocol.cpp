@@ -86,6 +86,31 @@ void ProtocolSentry::send(const geometry_msgs::msg::Twist &msg) {
   packet_tool_->sendPacket(packet_);
 }
 
+void ProtocolSentry::send() {
+  const auto& vision_data = this->vision_data_;
+  const auto& nav_data = this->nav_data_;
+
+  packet_.loadData<unsigned char>(vision_data.fire_advice ? FireState::Fire : FireState::NotFire, 1);
+  packet_.loadData<float>(static_cast<float>(vision_data.pitch), 2);
+  packet_.loadData<float>(static_cast<float>(vision_data.yaw), 6);
+  packet_.loadData<float>(static_cast<float>(vision_data.distance), 10);
+ 
+  float x = nav_data.linear.x;
+  float y = nav_data.linear.y;
+  float z = nav_data.angular.z;
+  uint8_t spin = 1;
+ 
+  packet_.loadData<unsigned char>(spin, 14);
+  // linear x
+  packet_.loadData<float>(x, 15);
+  // linear y
+  packet_.loadData<float>(y, 19);
+  // angular z
+  packet_.loadData<float>(z, 23);
+
+  packet_tool_->sendPacket(packet_);
+}
+
 bool ProtocolSentry::receive(rm_interfaces::msg::SerialReceiveData &data) {
   FixedPacket<32> packet;
   if (packet_tool_->recvPacket(packet)) {
@@ -134,11 +159,17 @@ std::vector<rclcpp::SubscriptionBase::SharedPtr> ProtocolSentry::getSubscription
   auto sub1 = node->create_subscription<rm_interfaces::msg::GimbalCmd>(
     "armor_solver/cmd_gimbal",
     rclcpp::SensorDataQoS(),
-    [this](const rm_interfaces::msg::GimbalCmd::SharedPtr msg) { this->send(*msg); });
+    [this](const rm_interfaces::msg::GimbalCmd::SharedPtr msg) { 
+      this->vision_data_ = *msg;
+      this->send(); 
+    });
   auto sub2 = node->create_subscription<rm_interfaces::msg::GimbalCmd>(
     "rune_solver/cmd_gimbal",
     rclcpp::SensorDataQoS(),
-    [this](const rm_interfaces::msg::GimbalCmd::SharedPtr msg) { this->send(*msg); });
+    [this](const rm_interfaces::msg::GimbalCmd::SharedPtr msg) { 
+      this->vision_data_ = *msg;
+      this->send(); 
+    });
   //auto sub3 = node->create_subscription<rm_interfaces::msg::ChassisCmd>(
   //  "cmd_vel_chassis",
   //  rclcpp::SensorDataQoS(),
@@ -146,7 +177,10 @@ std::vector<rclcpp::SubscriptionBase::SharedPtr> ProtocolSentry::getSubscription
   auto sub3= node->create_subscription<geometry_msgs::msg::Twist>(
     "cmd_vel_chassis",
      rclcpp::SensorDataQoS(),
-    [this](const geometry_msgs::msg::Twist::SharedPtr msg) { this->send(*msg); });
+    [this](const geometry_msgs::msg::Twist::SharedPtr msg) { 
+      this->nav_data_ = *msg;
+      this->send(); 
+    });
 
   //rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr ammunition_publisher_ = this->create_publisher<std_msgs::msg::Int32>("/my_ammunition",10);
 
