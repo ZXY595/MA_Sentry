@@ -6,7 +6,13 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
-r2r.workspace = true
-tokio = { workspace = true, features = ["io-util"] }
-tokio-serial = { version = "5.4.5", features = ["codec"] }
-tokio-util = { workspace = true, features = ["codec"] }
+ros2-client.workspace = true
+smol.workspace = true
+serialport = "4.7"
+ma-dds.workspace = true
+serde = { workspace = true, features = ["derive"] }
+async-io = "2.4"
+ma_interfaces.workspace = true
+zerocopy = { version = "0.8", features = ["derive"] }
+pin-project.workspace = true
+log = "*"

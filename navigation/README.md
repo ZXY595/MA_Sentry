@@ -81,6 +81,7 @@
     git-fetch-with-cli = true
     ```
 
+    安装rustup和ros依赖
     ```sh
     . prebuild.sh
     ```

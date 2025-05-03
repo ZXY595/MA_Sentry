@@ -1,0 +1,9 @@
+[package]
+name = "ma-dds"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ros2-client.workspace = true
+thiserror.workspace = true
+serde.workspace = true

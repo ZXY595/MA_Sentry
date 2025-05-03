@@ -1,13 +1,23 @@
 [workspace]
 resolver = "3"
-members = ["src/ma_decision/ma_behavior_tree", "src/rm_driver/ma_serial_driver"]
+members = [
+    "src/ma-dds",
+    "src/ma_decision/ma_behavior_tree",
+    "src/rm_driver/ma_serial_driver",
+    "src/rm_interfaces",
+]
 
 [workspace.dependencies]
 anyhow = "1.0"
-r2r = "0.9.4"
-tokio = { version = "1.44.0", features = ["rt"] }
-tokio-util = { version = "0.7.13" }
-futures-util = { version = "0.3.31", default-features = false, features = [
-    "std",
-    "async-await",
-] }
+thiserror = "2.0"
+ros2-client = { version = "0.8.1", features = ["pre-iron-gid"] }
+smol = { version = "2.0" }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+async-channel = "2.3"
+async-broadcast = "0.7"
+ma-dds = { path = "src/ma-dds" }
+serde = "1.0"
+ma_interfaces = { path = "src/rm_interfaces" }
+env_logger = "0.11"
+log = "0.4"
+pin-project = "1.1"

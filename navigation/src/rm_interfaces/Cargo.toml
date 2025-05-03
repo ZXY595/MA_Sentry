@@ -1,0 +1,8 @@
+[package]
+name = "ma_interfaces"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ros2-client.workspace=true
+serde.workspace=true

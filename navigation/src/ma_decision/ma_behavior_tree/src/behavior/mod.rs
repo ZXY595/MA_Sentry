@@ -1,76 +1,82 @@
-use bonsai_bt::Behavior::{self, *};
-use r2r::geometry_msgs::msg::{Point, Pose};
+mod nav;
+use anyhow::anyhow;
+use async_broadcast::Receiver;
+use futures_util::{Stream, StreamExt};
+use ma_interfaces::{geometry_msgs::msg::Point, nav2_msgs::action::NavigateToPose};
+use ros2_client::action::ActionClient;
 
-use crate::sentry_action::SentryAction;
-pub const LOW_HP_THRESHOLD: i32 = 110;
-pub const HIGH_HP_THRESHOLD: i32 = 399;
-
-const BUFF_POINT: Point = Point {
-    x: 3.5,
-    y: 5.3,
-    // x: 1.0,
-    // y: 0.0,
-    z: 0.0,
-};
-
-const BASE_POINT: Point = Point {
-    x: 0.0,
-    y: 0.0,
-    z: 0.0,
-};
-pub fn get_behavior() -> Behavior<SentryAction> {
-    Sequence(vec![
-        Action(SentryAction::UntilGameStarted),
-        WhileAll(
-            Box::new(Action(SentryAction::UntilGameOver)),
-            vec![AlwaysSucceed(Box::new(alive_task()))],
-        ),
-    ])
+pub struct SentryCtx {
+    nav_clinet: ActionClient<NavigateToPose::Action>,
+    status_rx: StatusReceivers,
+}
+struct StatusReceivers {
+    game_status: Receiver<u8>,
+    hp: Receiver<i16>,
 }
 
-fn alive_task() -> Behavior<SentryAction> {
-    Sequence(vec![
-        Action(SentryAction::UntilIsAlive),
-        attack_move_to_buff_area_and_retreat(),
-    ])
+#[repr(u8)]
+enum GameStatus {
+    Idle = 0,
+    Prepare = 3,
+    InGame = 4,
 }
 
-fn attack_move_to_buff_area_and_retreat() -> Behavior<SentryAction> {
-    If(
-        Box::new(Action(SentryAction::IsHpGreaterThan(LOW_HP_THRESHOLD))),
-        Box::new(move_to_buff_area()),
-        Box::new(move_to_supply()),
-    )
+impl SentryCtx {
+    pub fn new(
+        nav_clinet: ActionClient<NavigateToPose::Action>,
+        game_status_rx: Receiver<u8>,
+        hp_rx: Receiver<i16>,
+    ) -> Self {
+        Self {
+            nav_clinet,
+            status_rx: StatusReceivers {
+                game_status: game_status_rx,
+                hp: hp_rx,
+            },
+        }
+    }
 }
 
-fn move_to_buff_area() -> Behavior<SentryAction> {
-    WhenAny(vec![
-        Sequence(vec![
-            Action(SentryAction::UntilIsHpLessThan(LOW_HP_THRESHOLD)),
-            Action(SentryAction::CancelMoving),
-            move_to_supply(),
-        ]),
-        move_to_random_point(BUFF_POINT),
-    ])
+pub async fn sentry_task(ctx: SentryCtx) -> Result<(), anyhow::Error> {
+    wait_util(ctx.status_rx.game_status.new_receiver(), |game_status| {
+        game_status == GameStatus::InGame as u8
+    })
+    .await?;
+    log::info!("Game is started");
+    loop {
+        nav::nav_to_point(
+            &ctx.nav_clinet,
+            &ctx.status_rx,
+            Point {
+                x: 1.6,
+                y: 0.0,
+                z: 0.0,
+            },
+        )
+        .await?;
+        nav::nav_to_point(
+            &ctx.nav_clinet,
+            &ctx.status_rx,
+            Point {
+                x: 1.6,
+                y: -2.0,
+                z: 0.0,
+            },
+        )
+        .await?;
+    }
 }
 
-fn move_to_supply() -> Behavior<SentryAction> {
-    Sequence(vec![
-        move_to_point(BASE_POINT),
-        Action(SentryAction::UntilIsHpGreaterThan(HIGH_HP_THRESHOLD)),
-    ])
-}
-
-fn move_to_point(point: Point) -> Behavior<SentryAction> {
-    Action(SentryAction::MoveTo(Pose {
-        position: point,
-        ..Default::default()
-    }))
-}
-
-fn move_to_random_point(point: Point) -> Behavior<SentryAction> {
-    Action(SentryAction::RandomMoveTo(Pose {
-        position: point,
-        ..Default::default()
-    }))
+pub(crate) async fn wait_util<T>(
+    stream: impl Stream<Item = T>,
+    mut f: impl FnMut(T) -> bool,
+) -> Result<(), anyhow::Error>
+where
+    T: Clone,
+{
+    stream
+        .any(|game_status| std::future::ready(f(game_status)))
+        .await
+        .then_some(())
+        .ok_or(anyhow!("Fail to receive game status"))
 }

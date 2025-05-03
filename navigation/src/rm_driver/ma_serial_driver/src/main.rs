@@ -1,48 +1,83 @@
-mod decoder;
-mod encoder;
+#[deny(clippy::undocumented_unsafe_blocks)]
+mod frames;
 
-use std::{pin::pin, time::Duration};
+mod ttyio;
+mod util;
 
 use anyhow::Context;
-use futures_util::{SinkExt, StreamExt};
-use r2r::geometry_msgs::msg::Twist;
-use tokio::runtime;
-use tokio_serial::SerialPortBuilderExt;
-use tokio_util::codec::FramedWrite;
+use frames::GimbalTwistFrame;
+use futures_util::{AsyncWriteExt, SinkExt, StreamExt, TryStreamExt};
+use ma_dds::prelude::Ros2NodeExt;
+use ma_interfaces::{
+    geometry_msgs::msg::Twist,
+    msg::{GimbalCmd, SerialReceiveData},
+};
+use ros2_client::{Publisher, Subscription};
+use smol::io::AsyncReadExt;
+use zerocopy::FromBytes;
 
 const SERIAL_PATH: &str = "/dev/ttyACM0";
-const SERIAL_BAUD: u32 = 9600;
+const SERIAL_BAUD: u32 = 115200;
 
 fn main() -> Result<(), anyhow::Error> {
-    let ctx = r2r::Context::create()?;
-    let mut node = r2r::Node::create(ctx, "serial_driver", "/ma")?;
+    let mut node = ma_dds::Ros2NodeBuilder::new()
+        .name("/ma", "serial_driver")
+        .build()?;
 
-    let chassis_subscription =
-        node.subscribe::<Twist>("/cmd_vel_chassis", r2r::QosProfile::default())?;
+    let chassis_subscription: Subscription<Twist> = node
+        .pub_sub_builder()
+        .topic_base_name("cmd_vel_chassis")
+        .type_name("geometry_msgs", "Twist")
+        .build_subscription()?;
 
-    let runtime = runtime::Builder::new_current_thread().enable_io().build()?;
+    let gimbal_subscription: Subscription<GimbalCmd> = node
+        .pub_sub_builder()
+        .topic_base_name("cmd_gimbal")
+        .type_name("rm_interfaces", "GimbalCmd")
+        .build_subscription()?;
 
-    runtime.spawn(async move {
-        node.spin_once(Duration::from_millis(50));
-        tokio::task::yield_now().await;
-    });
+    let serial_receive_publisher: Publisher<SerialReceiveData> = node
+        .pub_sub_builder()
+        .topic_base_name("serial_receive")
+        .type_name("rm_interfaces", "SerialReceiveData")
+        .build_publisher()?;
 
-    runtime.block_on(async {
-        let mut serial_port = tokio_serial::new(SERIAL_PATH, SERIAL_BAUD)
-            .open_native_async()
-            .context("Unable to open serial port")?;
+    let serial_port = serialport::new(SERIAL_PATH, SERIAL_BAUD)
+        .open_native()
+        .context("Unable to open serial port")?;
 
-        serial_port
-            .set_exclusive(false)
-            .context("Unable to set serial port exclusive to false")?;
+    let (serial_rx, serial_tx) = ttyio::tty_split(serial_port);
 
-        let serial_sink = FramedWrite::new(serial_port, encoder::TwistEncoder::default());
+    let mut serial_rx = smol::Async::new(serial_rx)?;
+    let serial_tx = smol::Async::new(serial_tx)?;
 
-        chassis_subscription
-            .map(|twist| Ok(twist))
-            .forward(pin!(serial_sink.sink_map_err(anyhow::Error::from)))
-            .await?;
+    smol::spawn(async move { node.spinner()?.spin().await }).detach();
 
-        Ok(())
+    smol::spawn::<anyhow::Result<()>>(async move {
+        let mut serial_buf = [0u8; size_of::<frames::SerialReceiveFrame>()];
+        loop {
+            serial_rx.read_exact(&mut serial_buf).await?;
+            let frame = frames::SerialReceiveFrame::ref_from_bytes(&serial_buf)
+                .map_err(|received| anyhow::anyhow!("Received invalid frame: {received:?}"))?;
+            serial_receive_publisher.async_publish(frame.into()).await?;
+        }
+    })
+    .detach();
+
+    smol::block_on(async {
+        let gimbal_stream = gimbal_subscription
+            .async_stream()
+            .map_ok(frames::GimbalFrame::from)
+            .map_err(anyhow::Error::from);
+        let chassis_stream = chassis_subscription
+            .async_stream()
+            .map_ok(frames::TwistFrame::from)
+            .map_err(anyhow::Error::from);
+
+        util::CachedOr::<GimbalTwistFrame, _, _>::new(gimbal_stream, chassis_stream)
+            .map(frames::SerialFrame::from)
+            .map(Result::Ok)
+            .forward(serial_tx.into_sink().sink_map_err(anyhow::Error::from))
+            .await
     })
 }

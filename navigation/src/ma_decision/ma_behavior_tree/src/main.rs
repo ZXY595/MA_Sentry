@@ -1,85 +1,130 @@
 mod behavior;
+#[cfg(feature = "fake_serial")]
+mod fake_serial;
 mod sentry_action;
 
-use std::{pin::pin, time::Duration};
+use std::pin::pin;
 
-use bonsai_bt::{BT, Event, Timer, UpdateArgs};
-use futures_util::StreamExt;
-use r2r::{QosProfile, qos, rm_interfaces};
-use sentry_action::SentryState;
-use tokio::task;
+use behavior::SentryCtx;
+use futures_util::{Stream, StreamExt};
+use ma_dds::prelude::Ros2NodeExt;
+use ma_interfaces::nav2_msgs::action::NavigateToPose;
+use pin_project::pin_project;
+use ros2_client::action::ActionClientQosPolicies;
+use std::task::ready;
 
 fn main() -> Result<(), anyhow::Error> {
     env_logger::init();
-    let ctx = r2r::Context::create()?;
-    let mut node = r2r::Node::create(ctx, "behavior_tree", "/ma")?;
-
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_time()
+    let mut node = ma_dds::Ros2NodeBuilder::new()
+        .name("/ma", "behavior_tree")
         .build()?;
 
-    let behavior = behavior::get_behavior();
+    #[cfg(not(feature = "fake_serial"))]
+    let serial_subscription = node
+        .pub_sub_builder::<ma_interfaces::msg::SerialReceiveData>()
+        .topic_name("/serial", "receive")
+        .build_subscription()?;
 
-    let serial_stream = node.subscribe::<rm_interfaces::msg::SerialReceiveData>(
-        "/serial/receive",
-        QosProfile::default()
-            .reliability(qos::ReliabilityPolicy::SystemDefault)
-            .history(qos::HistoryPolicy::KeepLast)
-            .durability(qos::DurabilityPolicy::SystemDefault),
-    )?;
+    //     "/serial/receive",
+    //     QosProfile::default()
+    //         .reliability(qos::ReliabilityPolicy::SystemDefault)
+    //         .history(qos::HistoryPolicy::KeepLast)
+    //         .durability(qos::DurabilityPolicy::SystemDefault),
+    // )?;
 
-    let client = node.create_action_client("/navigate_to_pose")?;
-    let (mut sentry_state, sync_state) = SentryState::new(client);
+    let nav_client = node
+        .action_client_builder::<NavigateToPose::Action>()
+        .action_base_name("navigate_to_pose")
+        .type_name("nav2", "NavigateToPose")
+        .qos(ActionClientQosPolicies {
+            goal_service: Default::default(),
+            result_service: Default::default(),
+            cancel_service: Default::default(),
+            feedback_subscription: Default::default(),
+            status_subscription: Default::default(),
+        })
+        .build()?;
 
-    let mut behavior_tree = BT::new(behavior, ());
-    let graph_viz = behavior_tree.get_graphviz();
-    log::info!("{graph_viz}");
+    smol::spawn(node.spinner()?.spin()).detach();
 
-    runtime.spawn(async move {
-        let mut pin_serial = pin!(serial_stream);
-        let mut cached_hp = UpdateDetecter(0);
-        let mut cached_ammo = UpdateDetecter(0);
-        let mut cached_game_started = UpdateDetecter(false);
-        while let Some(data) = pin_serial.next().await {
-            if cached_hp.update(data.judge_system_data.hp as i32) {
-                *sync_state.hp.write().await = cached_hp.0;
-            }
-            if cached_ammo.update(data.judge_system_data.ammo as u32) {
-                *sync_state.ammo.write().await = cached_ammo.0;
-            }
-            if cached_game_started.update(data.judge_system_data.game_status == 4) {
-                *sync_state.is_game_started.write().await = cached_game_started.0;
-            }
-        }
-    });
+    let (hp_tx, hp_rx) = async_broadcast::broadcast(2);
+    let (game_status_tx, game_status_rx) = async_broadcast::broadcast(1);
 
-    runtime.block_on(async move {
-        let mut timer = Timer::init_time();
-        loop {
-            let event = Event::from(UpdateArgs { dt: timer.get_dt() });
-            behavior_tree.tick(&event, &mut |event, _| {
-                let dt = event.dt;
-                event.action.tick(&mut sentry_state, dt)
-            });
-            node.spin_once(Duration::from_millis(100));
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    });
-    Ok(())
+    smol::spawn(async move {
+        #[cfg(not(feature = "fake_serial"))]
+        let serial_stream = serial_subscription
+            .async_stream()
+            .map_ok(|(msg, _)| {
+                let SerialReceiveData {
+                    judge_system_data:
+                        JudgeSystemData {
+                            game_status, hp, ..
+                        },
+                    ..
+                } = msg;
+                (hp, game_status)
+            })
+            .inspect_err(|e| log::error!("Error: {e}"))
+            .filter_map(|x| async { x.ok() });
+        #[cfg(feature = "fake_serial")]
+        let serial_stream = fake_serial::fake_serial();
+
+        Dedup::new(serial_stream, (0, 0))
+            .for_each(async |(hp, game_status)| {
+                hp_tx.broadcast_direct(hp).await.unwrap();
+                game_status_tx.broadcast_direct(game_status).await.unwrap();
+            })
+            .await;
+    })
+    .detach();
+
+    smol::block_on(behavior::sentry_task(SentryCtx::new(
+        nav_client,
+        game_status_rx,
+        hp_rx,
+    )))
 }
 
-struct UpdateDetecter<T>(pub T);
+#[pin_project]
+struct Dedup<S: Stream> {
+    #[pin]
+    inner: S,
+    last: S::Item,
+}
 
-impl<T> UpdateDetecter<T>
+impl<S: Stream> Dedup<S> {
+    fn new(inner: S, last_default: S::Item) -> Self {
+        Self {
+            inner,
+            last: last_default,
+        }
+    }
+}
+
+impl<S> Stream for Dedup<S>
 where
-    T: PartialEq,
+    S: Stream<Item: PartialEq + Clone>,
 {
-    pub fn update(&mut self, data: T) -> bool {
-        if self.0 != data {
-            self.0 = data;
-            true
-        } else {
-            false
+    type Item = S::Item;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        use std::task::Poll;
+        let mut this = self.project();
+        let last = this.last;
+        let next = ready!(this.inner.as_mut().poll_next(cx));
+        match next {
+            Some(next) => {
+                if next.ne(last) {
+                    *last = next.clone();
+                    Poll::Ready(Some(next))
+                } else {
+                    Poll::Pending
+                }
+            }
+            None => Poll::Ready(None),
         }
     }
 }

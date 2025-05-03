@@ -3,6 +3,7 @@ build/
 install/
 target/
 log/
+temp/
 
 .vscode/
 .cache/

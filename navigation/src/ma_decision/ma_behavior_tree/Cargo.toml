@@ -5,15 +5,23 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-bonsai-bt = { version = "0.10.0", features = ["visualize"] }
-r2r.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-tokio = { workspace = true, features = ["sync", "time", "rt-multi-thread"] }
-env_logger = "0.11"
-log = "0.4"
-futures-util = "0.3"
-rand = "0.9.0"
+thiserror.workspace = true
+ros2-client.workspace = true
+ma-dds.workspace = true
+serde = { workspace = true, features = ["derive"] }
+smol.workspace = true
+async-broadcast.workspace = true
+futures-util.workspace = true
+rand = "0.9"
+ma_interfaces.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pin-project.workspace = true
 
 [[bin]]
 name = "ma_bt"
 path = "src/main.rs"
+
+[features]
+fake_serial = []
+default = ["fake_serial"]
