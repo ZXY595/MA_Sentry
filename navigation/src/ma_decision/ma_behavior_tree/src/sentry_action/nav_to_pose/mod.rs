@@ -17,10 +17,7 @@ use ros2_client::{
 use smol::future::FutureExt as SmolFutureExt;
 pub type Client = ActionClient<NavigateToPose::Action>;
 
-pub async fn start_nav(
-    client: &Client,
-    point: Point,
-) -> Result<(UUID, Time), SendGoalError> {
+pub async fn start_nav(client: &Client, point: Point) -> Result<(UUID, Time), SendGoalError> {
     let send_goal_with_time_out_result = client
         .async_send_goal(NavigateToPose::Goal {
             pose: PoseStamped {
@@ -60,6 +57,7 @@ pub async fn start_nav(
     Ok((uuid, stamp))
 }
 
+#[expect(unused)]
 pub async fn log_feedback(client: &Client, goal_id: UUID) {
     client
         .feedback_stream(goal_id)

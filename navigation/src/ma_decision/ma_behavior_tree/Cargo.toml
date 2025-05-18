@@ -10,18 +10,14 @@ ros2-client.workspace = true
 ma-dds.workspace = true
 serde = { workspace = true, features = ["derive"] }
 smol.workspace = true
-async-broadcast.workspace = true
 futures-util.workspace = true
-rand = "0.9"
 ma_interfaces.workspace = true
 env_logger.workspace = true
 log.workspace = true
-pin-project.workspace = true
+pin-project-lite.workspace = true
+async-shutdown = "0.2"
 
 [[bin]]
 name = "ma_bt"
 path = "src/main.rs"
 
-[features]
-fake_serial = []
-default = ["fake_serial"]

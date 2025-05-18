@@ -11,13 +11,17 @@ members = [
 anyhow = "1.0"
 thiserror = "2.0"
 ros2-client = { version = "0.8.1", features = ["pre-iron-gid"] }
-smol = { version = "2.0" }
+smol = "2.0"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
+futures-core = "0.3"
 async-channel = "2.3"
-async-broadcast = "0.7"
 ma-dds = { path = "src/ma-dds" }
 serde = "1.0"
 ma_interfaces = { path = "src/rm_interfaces" }
 env_logger = "0.11"
 log = "0.4"
-pin-project = "1.1"
+pin-project-lite = "0.2"
+
+[profile.release]
+lto = true
+

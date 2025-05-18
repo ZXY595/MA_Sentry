@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+futures-core.workspace = true
+pin-project-lite.workspace = true
 ros2-client.workspace = true
 thiserror.workspace = true
 serde.workspace = true

@@ -17,8 +17,8 @@ pub struct SerialReceiveData {
 pub struct JudgeSystemData {
     pub game_status: u8,
     pub remaining_time: i16,
-    pub hp: i16,
-    pub outpost_hp: i16,
+    pub hp: u16,
+    pub outpost_hp: u16,
     pub ammo: u16,
     pub operator_command: OperatorCommand,
 }
@@ -39,4 +39,9 @@ pub struct GimbalCmd {
     pub pitch_diff: f64,
     pub distance: f64,
     pub fire_advice: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BTState {
+    pub spin: bool,
 }

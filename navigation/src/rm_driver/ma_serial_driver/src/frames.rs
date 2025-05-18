@@ -1,6 +1,6 @@
 use ma_interfaces::{
     geometry_msgs::msg::Twist,
-    msg::{GimbalCmd, JudgeSystemData, SerialReceiveData},
+    msg::{BTState, GimbalCmd, JudgeSystemData, SerialReceiveData},
 };
 use ros2_client::MessageInfo;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
@@ -17,45 +17,47 @@ pub struct SerialFrame<T> {
 }
 
 #[derive(IntoBytes, Immutable, Default, Clone)]
-pub struct GimbalTwistFrame {
+pub struct SerialSendFrame {
     pub gimbal: GimbalFrame,
     pub twist: TwistFrame,
+    pub flags: FlagsFrame,
 }
 
 #[derive(IntoBytes, Immutable, Default, Clone)]
 #[repr(packed)]
 pub struct GimbalFrame {
-    #[expect(unused)]
-    fire_advice: bool,
-    #[expect(unused)]
-    pitch: f64,
-    #[expect(unused)]
-    yaw: f64,
-    #[expect(unused)]
-    distance: f64,
+    pitch: f32,
+    yaw: f32,
+    distance: f32,
 }
 
 #[derive(IntoBytes, Immutable, Default, Clone)]
 #[repr(packed)]
 pub struct TwistFrame {
+    linear: [f32; 2],
     #[expect(unused)]
-    linear: [f64; 3],
-    #[expect(unused)]
-    angular: [f64; 3],
-    #[expect(unused)]
+    angular_z: f32,
+}
+
+#[derive(IntoBytes, Immutable, Clone)]
+#[repr(packed)]
+pub struct FlagsFrame {
+    fire_advice: bool,
     spin_advice: bool,
+    #[expect(unused)]
+    follow_gimbal_advice: bool,
 }
 
 #[derive(FromBytes, Immutable, KnownLayout)]
 #[repr(packed)]
 pub struct SerialReceiveFrame {
     pub mode: u8,
-    pub bullet_speed: f32,
     pub roll: f32,
     pub yaw: f32,
     pub pitch: f32,
     pub game_status: u8,
-    pub hp: i16,
+    pub bullet_speed: f32,
+    pub hp: u16,
     pub ammo: u16,
     pub outpost_hp: u16,
 }
@@ -77,49 +79,13 @@ where
         self.as_bytes()
     }
 }
-
-impl From<Twist> for TwistFrame {
-    fn from(value: Twist) -> Self {
+impl Default for FlagsFrame {
+    fn default() -> Self {
         Self {
-            linear: [value.linear.x, value.linear.y, value.linear.z],
-            angular: [value.angular.x, value.angular.y, value.angular.z],
-            spin_advice: false,
+            fire_advice: Default::default(),
+            spin_advice: Default::default(),
+            follow_gimbal_advice: Default::default(),
         }
-    }
-}
-
-impl From<(Twist, MessageInfo)> for TwistFrame {
-    fn from(value: (Twist, MessageInfo)) -> Self {
-        Self::from(value.0)
-    }
-}
-
-impl AsRef<[u8]> for TwistFrame {
-    fn as_ref(&self) -> &[u8] {
-        self.as_bytes()
-    }
-}
-
-impl From<GimbalCmd> for GimbalFrame {
-    fn from(value: GimbalCmd) -> Self {
-        Self {
-            fire_advice: value.fire_advice,
-            pitch: value.pitch,
-            yaw: value.yaw,
-            distance: value.distance,
-        }
-    }
-}
-
-impl From<(GimbalCmd, MessageInfo)> for GimbalFrame {
-    fn from(value: (GimbalCmd, MessageInfo)) -> Self {
-        Self::from(value.0)
-    }
-}
-
-impl AsRef<[u8]> for GimbalFrame {
-    fn as_ref(&self) -> &[u8] {
-        self.as_bytes()
     }
 }
 
@@ -142,14 +108,26 @@ impl From<&SerialReceiveFrame> for SerialReceiveData {
     }
 }
 
-impl UpdateFrom<GimbalFrame> for GimbalTwistFrame {
-    fn update_from(&mut self, other: GimbalFrame) {
-        self.gimbal = other;
+impl UpdateFrom<(GimbalCmd, MessageInfo)> for SerialSendFrame {
+    fn update_from(&mut self, (value, _): (GimbalCmd, MessageInfo)) {
+        let gimbal = &mut self.gimbal;
+        gimbal.pitch = value.pitch as f32;
+        gimbal.yaw = value.yaw as f32;
+        gimbal.distance = value.distance as f32;
+        self.flags.fire_advice = value.fire_advice;
+        // self.flags.spin_advice = value.distance >= 0.0;
     }
 }
 
-impl UpdateFrom<TwistFrame> for GimbalTwistFrame {
-    fn update_from(&mut self, other: TwistFrame) {
-        self.twist = other;
+impl UpdateFrom<(Twist, MessageInfo)> for SerialSendFrame {
+    fn update_from(&mut self, (value, _): (Twist, MessageInfo)) {
+        let twist = &mut self.twist;
+        twist.linear = [value.linear.x, value.linear.y].map(|x| x as f32);
+    }
+}
+
+impl UpdateFrom<(BTState, MessageInfo)> for SerialSendFrame {
+    fn update_from(&mut self, (value, _): (BTState, MessageInfo)) {
+        self.flags.spin_advice = value.spin;
     }
 }
